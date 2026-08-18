@@ -153,10 +153,11 @@ def tranzupi_webhook():
                 order = db.get_panel_order_by_id(order_id)
                 if order:
                     user_id = order["telegram_id"]
+                    key_code = db.generate_bala_mod_key()
                     delivered_msg = (
                         f"✅ *Payment Auto-Verified via TranzUPI!*\n\n"
                         f"🆔 *Order ID:* `{order_id}`\n"
-                        f"🔑 *License Key:* `KEY-{uuid.uuid4().hex[:12].upper()}`\n\n"
+                        f"🔑 *License Key:* `{key_code}`\n\n"
                         f"Your key is ready to use!"
                     )
                     send_telegram_notification(user_id, delivered_msg)

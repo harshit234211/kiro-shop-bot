@@ -1480,7 +1480,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     await query.answer(res, show_alert=True)
                 return
 
-            key_code = res if res.startswith("KEY-") else "KEY-ACTIVATED"
+            key_code = res
             await query.answer("🎉 Purchase Successful!", show_alert=True)
             delivered_msg = (
                 f"✅ *Purchase Successful!*\n\n"

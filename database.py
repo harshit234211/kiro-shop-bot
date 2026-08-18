@@ -1644,6 +1644,16 @@ def create_panel_variant_order(telegram_id: int, variant_id: int, price: float, 
     finally:
         conn.close()
 
+def generate_bala_mod_key() -> str:
+    """
+    Generates a unique 40-character license key in 8 blocks of 5 uppercase alphanumeric characters.
+    Example: B7ETO-HIDQA-5MOOQ-REQMG-TBGJT-STY36-BDYQ4-YJW6L
+    """
+    import random
+    import string
+    chars = string.ascii_uppercase + string.digits
+    return '-'.join(''.join(random.choices(chars, k=5)) for _ in range(8))
+
 def process_wallet_panel_variant_payment(order_id: str) -> Tuple[bool, str]:
     """Atomic wallet deduction for Panel Variant purchase."""
     conn = get_connection()
@@ -1670,7 +1680,7 @@ def process_wallet_panel_variant_payment(order_id: str) -> Tuple[bool, str]:
         if current_bal < price:
             return False, f"INSUFFICIENT_BALANCE|Required: ₹{price:.0f}\nYour Balance: ₹{current_bal:.2f}"
 
-        key_code = f"KEY-{uuid.uuid4().hex[:12].upper()}"
+        key_code = generate_bala_mod_key()
         with conn:
             cursor.execute("""
                 UPDATE panel_orders
