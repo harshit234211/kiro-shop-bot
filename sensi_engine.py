@@ -3,20 +3,20 @@ from typing import Dict, Any, Tuple
 import database as db
 from logger import logger
 
-def generate_ff_sensitivity(telegram_id: int, order_id: str, brand: str, model: str, variant: str) -> Tuple[Dict[str, Any], str]:
+def generate_ff_sensitivity(telegram_id: int, order_id: str, brand: str, model: str, variant: str = "Standard") -> Tuple[Dict[str, Any], str]:
     """
-    Generates a unique random Free Fire sensitivity setup strictly within specified ranges.
+    Generates a unique random Free Fire sensitivity setup with 1-200 ranges.
     Saves the delivery record to the database and returns the data dict + formatted markdown string.
     """
-    general = random.randint(85, 100)
-    red_dot = random.randint(80, 100)
-    scope_2x = random.randint(70, 95)
-    scope_4x = random.randint(60, 90)
-    sniper = random.randint(40, 70)
-    free_look = random.randint(60, 100)
-    fire_button = random.randint(38, 60)
-    dpi = random.randint(420, 650)
-    pointer_speed = random.randint(5, 10)
+    general = random.randint(1, 200)
+    red_dot = random.randint(1, 200)
+    scope_2x = random.randint(1, 200)
+    scope_4x = random.randint(1, 200)
+    sniper = random.randint(1, 200)
+    free_look = random.randint(1, 200)
+    fire_button = random.randint(35, 65)
+    dpi = random.randint(360, 800)
+    pointer_speed = random.randint(1, 10)
 
     # Save to database
     db.save_sensi_delivery(
@@ -54,24 +54,23 @@ def generate_ff_sensitivity(telegram_id: int, order_id: str, brand: str, model: 
 
     formatted_msg = (
         f"🎯 *Kiro Sensi Delivered*\n\n"
-        f"📱 *Phone:*\n{model}\n\n"
-        f"💾 *Variant:*\n{variant}\n\n"
-        f"⚡ *General:* {general}\n"
-        f"🔴 *Red Dot:* {red_dot}\n"
-        f"🎯 *2x Scope:* {scope_2x}\n"
-        f"🔭 *4x Scope:* {scope_4x}\n"
-        f"🎯 *Sniper Scope:* {sniper}\n"
-        f"👀 *Free Look:* {free_look}\n\n"
-        f"🔥 *Fire Button Size:* {fire_button}%\n\n"
-        f"📏 *DPI:* {dpi}\n\n"
-        f"⚡ *Pointer Speed:* {pointer_speed}/10\n\n"
-        f"🎮 *Play 3-5 matches for best results.*"
+        f"📱 *Phone:* `{model}`\n\n"
+        f"⚡ *General:* `{general}` (1-200)\n"
+        f"🔴 *Red Dot:* `{red_dot}` (1-200)\n"
+        f"🎯 *2x Scope:* `{scope_2x}` (1-200)\n"
+        f"🔭 *4x Scope:* `{scope_4x}` (1-200)\n"
+        f"🎯 *Sniper Scope:* `{sniper}` (1-200)\n"
+        f"👀 *Free Look:* `{free_look}` (1-200)\n\n"
+        f"🔥 *Fire Button Size:* `{fire_button}%`\n"
+        f"📏 *Recommended DPI:* `{dpi}`\n"
+        f"⚡ *Pointer Speed:* `{pointer_speed}/10`\n\n"
+        f"🎮 *Play 3-5 matches for best headshot results!*"
     )
 
-    logger.info(f"Generated FF Sensitivity for Order {order_id} ({model} {variant})")
+    logger.info(f"Generated FF Sensitivity (1-200 range) for Order {order_id} ({model})")
     return data, formatted_msg
 
-def generate_sensi_profile(order_id: str, telegram_id: int, brand: str, model: str, variant: str) -> Dict[str, Any]:
+def generate_sensi_profile(order_id: str, telegram_id: int, brand: str, model: str, variant: str = "Standard") -> Dict[str, Any]:
     """Alias wrapper returning sensitivity data dictionary."""
     data, _ = generate_ff_sensitivity(telegram_id=telegram_id, order_id=order_id, brand=brand, model=model, variant=variant)
     return data

@@ -1109,46 +1109,50 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_sensi_models_keyboard(brand=brand))
     elif data.startswith("sb_b_"):
         brand = data.replace("sb_b_", "")
-        context.user_data["sensi_brand"] = brand
-        msg = f"🎯 *Kiro Free Fire Sensi Buy*\n\n📱 *Brand:* {brand}\n📲 *Step 2:* Select your phone model below:"
-        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_sensi_models_keyboard(brand=brand))
-    elif data.startswith("sb_m_"):
-        model = data.replace("sb_m_", "")
-        context.user_data["sensi_model"] = model
-        brand = context.user_data.get("sensi_brand", "Mobile")
-        msg = f"🎯 *Kiro Free Fire Sensi Buy*\n\n📱 *Phone:* {model}\n💾 *Step 3:* Select your RAM + Storage variant:"
-        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_sensi_variant_keyboard())
-    elif data.startswith("sb_v_"):
-        variant = data.replace("sb_v_", "")
-        brand = context.user_data.get("sensi_brand", "Mobile")
-        model = context.user_data.get("sensi_model", "Phone")
         price = db.get_sensi_price()
         order_id = gtw.generate_order_id().replace("KIR-", "SENSI-")
 
         db.create_sensi_order(
             telegram_id=user.id,
             brand=brand,
-            model=model,
-            ram=variant.split("+")[0].strip() if "+" in variant else variant,
-            storage=variant.split("+")[1].strip() if "+" in variant else variant,
+            model=f"{brand} Phone",
+            ram="Standard",
+            storage="Standard",
             payment_method="PENDING",
             price=price,
             order_id=order_id
         )
 
-        user_rec = db.get_or_create_user(user.id, user.username, user.first_name)
-        user_bal = user_rec.get("balance", 0.0)
-
-        msg = (
-            f"🎯 *Kiro Free Fire Sensi Checkout*\n\n"
-            f"📱 *Device:* {model}\n"
-            f"💾 *Variant:* {variant}\n"
-            f"🆔 *Order ID:* `{order_id}`\n"
-            f"💰 *Price:* ₹{price:.0f}\n"
-            f"💳 *Your Wallet Balance:* ₹{user_bal:.2f}\n\n"
-            f"👇 Select your payment method below to complete purchase:"
+        await render_unified_payment_screen(
+            update=update,
+            context=context,
+            order_id=order_id,
+            item_name=f"Free Fire Sensi ({brand})",
+            price=price,
+            back_callback="nav_main"
         )
-        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_sensi_checkout_keyboard(order_id, price))
+    elif data.startswith("sb_m_"):
+        model = data.replace("sb_m_", "")
+        price = db.get_sensi_price()
+        order_id = gtw.generate_order_id().replace("KIR-", "SENSI-")
+        db.create_sensi_order(
+            telegram_id=user.id,
+            brand="Phone",
+            model=model,
+            ram="Standard",
+            storage="Standard",
+            payment_method="PENDING",
+            price=price,
+            order_id=order_id
+        )
+        await render_unified_payment_screen(
+            update=update,
+            context=context,
+            order_id=order_id,
+            item_name=f"Free Fire Sensi ({model})",
+            price=price,
+            back_callback="nav_main"
+        )
 
     elif data.startswith("sp_wal_"):
         order_id = data.replace("sp_wal_", "")

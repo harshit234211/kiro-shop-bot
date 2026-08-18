@@ -41,12 +41,12 @@ class TestSensiBuyFeature(unittest.TestCase):
             variant="8GB + 256GB"
         )
 
-        self.assertTrue(85 <= data["general"] <= 100)
-        self.assertTrue(80 <= data["red_dot"] <= 100)
-        self.assertTrue(70 <= data["scope_2x"] <= 95)
-        self.assertTrue(60 <= data["scope_4x"] <= 90)
-        self.assertTrue(40 <= data["sniper"] <= 70)
-        self.assertTrue(60 <= data["free_look"] <= 100)
+        self.assertTrue(1 <= data["general"] <= 200)
+        self.assertTrue(1 <= data["red_dot"] <= 200)
+        self.assertTrue(1 <= data["scope_2x"] <= 200)
+        self.assertTrue(1 <= data["scope_4x"] <= 200)
+        self.assertTrue(1 <= data["sniper"] <= 200)
+        self.assertTrue(1 <= data["free_look"] <= 200)
         self.assertTrue(38 <= data["fire_button"] <= 60)
         self.assertTrue(420 <= data["dpi"] <= 650)
         self.assertTrue(5 <= data["pointer_speed"] <= 10)
