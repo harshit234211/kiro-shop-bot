@@ -653,23 +653,22 @@ async def handle_profile_click(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
 
 async def handle_spin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Renders the 🎰 Daily Spin menu card."""
+    """Renders the 🎰 Daily Spin menu card (Set to Coming Soon)."""
     user = update.effective_user
     if not user:
         return
     db.get_or_create_user(user.id, user.username, user.first_name)
 
     msg = (
-        f"🎰 *Daily Spin*\n\n"
-        f"Spin once every 24 hours.\n\n"
-        f"*Possible Numbers:*\n"
-        f"1 • 2 • 3 • 4 • 5 • 6 • 7 • 8 • 9 • 20\n\n"
-        f"🎯 *Special Number:* 20"
+        f"🎰 *Kiro Shop Daily Spin*\n\n"
+        f"⏳ *COMING SOON!* 🚀\n\n"
+        f"The Daily Spin feature is currently undergoing a major reward upgrade!\n\n"
+        f"🎁 Exciting new spin rewards, wallet cashbacks, and bonus points will be unlocked soon.\n\n"
+        f"👉 Stay tuned!"
     )
 
     keyboard = [
-        [InlineKeyboardButton("🎰 SPIN NOW", callback_data="spin_now")],
-        [InlineKeyboardButton("⬅️ Back", callback_data="nav_main")]
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
     ]
     markup = InlineKeyboardMarkup(keyboard)
 
@@ -1341,10 +1340,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await handle_gmail_recovery_issue_selection(update, context)
 
     elif data == "spin_now":
-        result, is_special, reward_amt, err = db.record_user_spin(user.id)
-        if err:
-            await query.answer(f"{err}", show_alert=True)
-            return
+        await query.answer("⏳ Daily Spin is COMING SOON!", show_alert=True)
+        return
 
         user_rec = db.get_or_create_user(user.id)
         current_bal = float(user_rec.get("balance", 0.0))
