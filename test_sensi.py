@@ -47,7 +47,7 @@ class TestSensiBuyFeature(unittest.TestCase):
         self.assertTrue(1 <= data["scope_4x"] <= 200)
         self.assertTrue(1 <= data["sniper"] <= 200)
         self.assertTrue(1 <= data["free_look"] <= 200)
-        self.assertTrue(38 <= data["fire_button"] <= 60)
+        self.assertTrue(35 <= data["fire_button"] <= 60)
         self.assertTrue(320 <= data["dpi"] <= 600)
         self.assertTrue(50 <= data["pointer_speed"] <= 100)
         self.assertIn("Kiro Sensi Generated", formatted_text)

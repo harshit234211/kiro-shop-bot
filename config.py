@@ -28,6 +28,9 @@ TRANZUPI_SECRET = os.getenv("TRANZUPI_SECRET", "")
 TRANZUPI_UPI_ID = os.getenv("TRANZUPI_UPI_ID", "paytm.s3h7hcx@pty")
 MERCHANT_NAME = os.getenv("MERCHANT_NAME", "RAJ NARAYAN")
 
+# Tournament App Configuration
+TOURNAMENT_APP_URL = os.getenv("TOURNAMENT_APP_URL", "https://t.me/KiroShopBot/app").strip()
+
 # Admin Security Settings
 admin_ids_str = os.getenv("ADMIN_USER_IDS", "").strip()
 if admin_ids_str:

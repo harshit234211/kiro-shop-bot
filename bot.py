@@ -748,20 +748,21 @@ def get_tournament_checkout_keyboard(order_id: str, price: float = 99.0) -> Inli
     return InlineKeyboardMarkup(keyboard)
 
 async def handle_tournament_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles 🏆 Tournament App entry (100% Free direct access)."""
+    """Handles 🏆 Tournament App entry (Direct App Access)."""
     user = update.effective_user
     if not user:
         return
 
     db.get_or_create_user(user.id, user.username, user.first_name)
 
+    app_url = config.TOURNAMENT_APP_URL
     unlocked_msg = (
         f"🏆 *Kiro Free Fire Tournament App*\n\n"
-        f"🎉 *100% Free Access!* Join our official tournament community for daily matches, custom rooms, and prizes!\n\n"
-        f"👇 Tap below to enter:"
+        f"🎉 *Welcome to Tournament App!* Access daily custom rooms, automated match scoring, and prize leaderboards!\n\n"
+        f"👇 Tap *🏆 OPEN TOURNAMENT APP 🚀* below to launch:"
     )
     keyboard = [
-        [InlineKeyboardButton("🏆 JOIN TOURNAMENT 🚀", url="https://t.me/+4RKa1Af80ghiMTY1")],
+        [InlineKeyboardButton("🏆 OPEN TOURNAMENT APP 🚀", url=app_url)],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
     ]
     markup = InlineKeyboardMarkup(keyboard)
