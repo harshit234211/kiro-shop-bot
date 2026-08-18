@@ -15,17 +15,26 @@ bot_lock = threading.Lock()
 def start_bot_worker():
     global bot_started
     with bot_lock:
-        if not bot_started:
-            bot_started = True
-            logging.info("🚀 Starting Telegram Bot polling thread in background...")
+        if bot_started:
+            return
+        bot_started = True
+
+    def bot_loop():
+        import time
+        import asyncio
+        import bot
+        while True:
             try:
-                import asyncio
+                logging.info("🚀 Starting 24/7 Telegram Bot polling loop...")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                import bot
                 bot.main()
             except Exception as e:
-                logging.error(f"❌ Error in Telegram Bot thread: {e}", exc_info=e)
+                logging.error(f"⚠️ Telegram Bot polling disconnected: {e}. Auto-reconnecting in 5s...", exc_info=True)
+                time.sleep(5)
+
+    t = threading.Thread(target=bot_loop, daemon=True)
+    t.start()
 
 @app.route('/')
 @app.route('/health')
