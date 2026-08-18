@@ -1459,7 +1459,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         order_id = data.replace("pay_upi_", "")
 
         # Determine amount and product name server-side
-        amount = 49.0
+        amount = 59.0
         item_name = "Product"
         if order_id.startswith("SENSI-"):
             amount = db.get_sensi_price()
