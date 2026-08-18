@@ -1382,19 +1382,25 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
             await query.answer("🎉 Payment Successful! Generating Sensitivity...", show_alert=True)
             order = db.get_sensi_order_by_id(order_id)
+            brand_name = order["brand"] if (order and "brand" in order) else "Mobile"
+            model_name = order["model"] if (order and "model" in order) else brand_name
             data, delivered_text = sensi_eng.generate_ff_sensitivity(
                 telegram_id=user.id,
                 order_id=order_id,
-                brand=order["brand"],
-                model=order["model"],
-                variant=order["variant"]
+                brand=brand_name,
+                model=model_name,
+                variant="Standard"
             )
             buttons = [
-                [InlineKeyboardButton("🔄 Generate Again", callback_data=f"sb_regen_{order['brand']}")],
+                [InlineKeyboardButton("🔄 Generate Again", callback_data=f"sb_regen_{brand_name}")],
                 [InlineKeyboardButton("💾 Save Profile", callback_data=f"sb_save_{data['profile_id']}"), InlineKeyboardButton("📤 Share", callback_data=f"sb_share_{data['profile_id']}")],
                 [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
             ]
-            await query.edit_message_text(text=delivered_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
+            try:
+                await query.edit_message_text(text=delivered_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
+            except Exception as err:
+                logger.warning(f"Markdown delivery fallback: {err}")
+                await query.edit_message_text(text=delivered_text.replace("`", "").replace("*", ""), reply_markup=InlineKeyboardMarkup(buttons))
 
         # 2. Tournament Order
         elif order_id.startswith("TRN-"):
