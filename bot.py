@@ -1131,7 +1131,39 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         else:
             await query.answer("⌛ Payment not completed yet! Please complete payment via UPI app first, then tap Check Payment Status.", show_alert=True)
 
-    # --- SENSI BUY CALLBACK HANDLERS ---
+    elif data.startswith("sb_regen_"):
+        brand = data.replace("sb_regen_", "")
+        new_order_id = gtw.generate_order_id().replace("KIR-", "SENSI-")
+        data_dict, delivered_text = sensi_eng.generate_ff_sensitivity(
+            telegram_id=user.id,
+            order_id=new_order_id,
+            brand=brand,
+            model=brand,
+            variant="Standard"
+        )
+        await query.answer("🔄 Generated new balanced profile!", show_alert=True)
+        buttons = [
+            [InlineKeyboardButton("🔄 Generate Again", callback_data=f"sb_regen_{brand}")],
+            [InlineKeyboardButton("💾 Save Profile", callback_data=f"sb_save_{data_dict['profile_id']}"), InlineKeyboardButton("📤 Share", callback_data=f"sb_share_{data_dict['profile_id']}")],
+            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
+        ]
+        await query.edit_message_text(text=delivered_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif data.startswith("sb_save_"):
+        profile_id = data.replace("sb_save_", "")
+        await query.answer(f"💾 Profile [{profile_id}] saved to your account!", show_alert=True)
+
+    elif data.startswith("sb_share_"):
+        profile_id = data.replace("sb_share_", "")
+        bot_uname = context.bot.username or "KiroShopBot"
+        share_url = f"https://t.me/share/url?url=https://t.me/{bot_uname}&text=Check%20out%20my%20Free%20Fire%20Sensi%20Profile%20[{profile_id}]%20on%20Kiro%20Shop!"
+        await query.answer("📤 Share link ready!", show_alert=True)
+        keyboard = [
+            [InlineKeyboardButton("📲 Share to Telegram Friends", url=share_url)],
+            [InlineKeyboardButton("⬅️ Back", callback_data="nav_main")]
+        ]
+        await query.edit_message_text(text=f"📤 *Share Profile [{profile_id}]*\n\nTap below to share your custom profile with friends!", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data == "sb_custom_input":
         context.user_data["awaiting_sensi_phone"] = True
         msg = (
@@ -1327,29 +1359,19 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
 
             await query.answer("🎉 Payment Successful! Generating Sensitivity...", show_alert=True)
             order = db.get_sensi_order_by_id(order_id)
-            deliv = sensi_eng.generate_sensi_profile(
-                order_id=order_id,
+            data, delivered_text = sensi_eng.generate_ff_sensitivity(
                 telegram_id=user.id,
+                order_id=order_id,
                 brand=order["brand"],
                 model=order["model"],
                 variant=order["variant"]
             )
-            delivered_msg = (
-                f"✅ *Payment Successful*\n\n"
-                f"📱 *Device:* `{deliv['model']} ({deliv['variant']})`\n"
-                f"💰 *Paid:* ₹{order['price']:.0f}\n"
-                f"🆔 *Order ID:* `{order_id}`\n\n"
-                f"⚡ *General:* `{deliv['general']}`\n"
-                f"🔴 *Red Dot:* `{deliv['red_dot']}`\n"
-                f"🎯 *2x Scope:* `{deliv['scope_2x']}`\n"
-                f"🔭 *4x Scope:* `{deliv['scope_4x']}`\n"
-                f"🎯 *Sniper Scope:* `{deliv['sniper']}`\n"
-                f"👀 *Free Look:* `{deliv['free_look']}`\n\n"
-                f"🔥 *Recommended Fire Button:* `{deliv['fire_button']}%`\n"
-                f"📏 *Recommended DPI:* `{deliv['dpi']}`\n"
-                f"⚡ *Pointer Speed:* `{deliv['pointer_speed']}/10`"
-            )
-            await query.edit_message_text(text=delivered_msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
+            buttons = [
+                [InlineKeyboardButton("🔄 Generate Again", callback_data=f"sb_regen_{order['brand']}")],
+                [InlineKeyboardButton("💾 Save Profile", callback_data=f"sb_save_{data['profile_id']}"), InlineKeyboardButton("📤 Share", callback_data=f"sb_share_{data['profile_id']}")],
+                [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
+            ]
+            await query.edit_message_text(text=delivered_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
         # 2. Tournament Order
         elif order_id.startswith("TRN-"):
@@ -1507,31 +1529,20 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         if payment_status in ["SUCCESS", "SUCCESSFUL", "PAID", "COMPLETED"]:
             if order_id.startswith("SENSI-"):
                 db.mark_sensi_order_paid(order_id)
-                order = db.get_sensi_order_by_id(order_id)
-                deliv = sensi_eng.generate_sensi_profile(
-                    order_id=order_id,
+                data, delivered_text = sensi_eng.generate_ff_sensitivity(
                     telegram_id=user.id,
+                    order_id=order_id,
                     brand=order["brand"],
                     model=order["model"],
                     variant=order["variant"]
                 )
                 await query.answer("🎉 Payment Verified! Sensi profile generated.", show_alert=True)
-                delivered_msg = (
-                    f"✅ *Payment Verified*\n\n"
-                    f"📱 *Device:* `{deliv['model']} ({deliv['variant']})`\n"
-                    f"💰 *Paid:* ₹{order['price']:.0f}\n"
-                    f"🆔 *Order ID:* `{order_id}`\n\n"
-                    f"⚡ *General:* `{deliv['general']}`\n"
-                    f"🔴 *Red Dot:* `{deliv['red_dot']}`\n"
-                    f"🎯 *2x Scope:* `{deliv['scope_2x']}`\n"
-                    f"🔭 *4x Scope:* `{deliv['scope_4x']}`\n"
-                    f"🎯 *Sniper Scope:* `{deliv['sniper']}`\n"
-                    f"👀 *Free Look:* `{deliv['free_look']}`\n\n"
-                    f"🔥 *Recommended Fire Button:* `{deliv['fire_button']}%`\n"
-                    f"📏 *Recommended DPI:* `{deliv['dpi']}`\n"
-                    f"⚡ *Pointer Speed:* `{deliv['pointer_speed']}/10`"
-                )
-                await query.edit_message_text(text=delivered_msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
+                buttons = [
+                    [InlineKeyboardButton("🔄 Generate Again", callback_data=f"sb_regen_{order['brand']}")],
+                    [InlineKeyboardButton("💾 Save Profile", callback_data=f"sb_save_{data['profile_id']}"), InlineKeyboardButton("📤 Share", callback_data=f"sb_share_{data['profile_id']}")],
+                    [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
+                ]
+                await query.edit_message_text(text=delivered_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
             elif order_id.startswith("TRN-"):
                 db.mark_tournament_order_success(order_id)
