@@ -1849,9 +1849,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             variants = db.get_panel_variants(p_name)
 
             msg = (
-                f"🎮 *{p_name}*\n\n"
-                f"Select duration option below:\n\n"
-                f"👇 *Available Durations & Pricing:*"
+                f"🔥 *{p_name}*\n\n"
+                f"Select Duration:"
             )
 
             buttons = []
@@ -1860,14 +1859,15 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     dur = v["duration"]
                     price = v["price"]
                     stock = v["is_in_stock"]
+                    icon = "⏱️" if ("Hour" in dur) else "📅"
                     if stock == 1 and price is not None:
-                        btn_label = f"✅ {dur} — ₹{float(price):.0f}"
+                        btn_label = f"{icon} {dur} — ₹{float(price):.0f}"
                         buttons.append([InlineKeyboardButton(btn_label, callback_data=f"pb_v_{v['id']}")])
                     else:
-                        btn_label = f"❌ {dur} — Out of Stock"
+                        btn_label = f"❌ {dur} — OUT OF STOCK"
                         buttons.append([InlineKeyboardButton(btn_label, callback_data=f"pb_oos_{v['id']}")])
             else:
-                buttons.append([InlineKeyboardButton("❌ Out of Stock", callback_data="pb_oos_0")])
+                buttons.append([InlineKeyboardButton("❌ OUT OF STOCK", callback_data="pb_oos_0")])
 
             buttons.append([InlineKeyboardButton("⬅️ Back to Shop", callback_data="nav_panel_shop")])
             await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
@@ -1883,34 +1883,27 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_panel_catalog_keyboard())
 
     elif data.startswith("pb_oos_"):
-        await query.answer("❌ This option is currently OUT OF STOCK. Please check back later!", show_alert=True)
+        await query.answer("❌ OUT OF STOCK", show_alert=True)
 
     elif data.startswith("pb_v_"):
         variant_id = int(data.replace("pb_v_", ""))
         v = db.get_panel_variant_by_id(variant_id)
         if not v or v["is_in_stock"] == 0 or v["price"] is None:
-            await query.answer("❌ Out of Stock!", show_alert=True)
+            await query.answer("❌ OUT OF STOCK", show_alert=True)
             return
 
         price = float(v["price"])
         order_id = gtw.generate_order_id().replace("KIR-", "PNL-")
         db.create_panel_variant_order(telegram_id=user.id, variant_id=variant_id, price=price, order_id=order_id, payment_method="PENDING")
 
-        msg = (
-            f"🛒 *Confirm Panel Purchase*\n\n"
-            f"🎮 *Product:* `{v['product_name']}`\n"
-            f"⏱️ *Duration:* {v['duration']}\n"
-            f"💰 *Price:* ₹{price:.0f}\n"
-            f"📦 *Stock:* ✅ In Stock\n\n"
-            f"Choose payment method:"
+        await render_unified_payment_screen(
+            update=update,
+            context=context,
+            order_id=order_id,
+            item_name=f"{v['product_name']} ({v['duration']})",
+            price=price,
+            back_callback="nav_panel_shop"
         )
-
-        keyboard = [
-            [InlineKeyboardButton(f"💰 Pay From Wallet (₹{price:.0f})", callback_data=f"pb_vwal_{order_id}")],
-            [InlineKeyboardButton(f"🏦 Pay With UPI (₹{price:.0f})", callback_data=f"pb_vupi_{order_id}")],
-            [InlineKeyboardButton("⬅️ Cancel & Back to Shop", callback_data="nav_panel_shop")]
-        ]
-        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
     elif data.startswith("pb_vwal_"):
         order_id = data.replace("pb_vwal_", "")

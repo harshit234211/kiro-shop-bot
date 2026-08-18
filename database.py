@@ -262,6 +262,17 @@ def init_db() -> None:
 
             # Seed panel variants with exact requested prices & stock statuses
             exact_variants = [
+                # BALA MOD MAIN ID (Exact requested pricing tiers)
+                ("BALA MOD MAIN ID", "1 Hour", 18.0, 1),
+                ("BALA MOD MAIN ID", "3 Hours", 42.0, 1),
+                ("BALA MOD MAIN ID", "6 Hours", 70.0, 1),
+                ("BALA MOD MAIN ID", "12 Hours", 125.0, 1),
+                ("BALA MOD MAIN ID", "1 Day", 245.0, 1),
+                ("BALA MOD MAIN ID", "2 Days", 485.0, 1),
+                ("BALA MOD MAIN ID", "3 Days", 725.0, 1),
+                ("BALA MOD MAIN ID", "5 Days", 1205.0, 1),
+                ("BALA MOD MAIN ID", "7 Days", 1500.0, 1),
+
                 # BR MOD ROOT
                 ("BR MOD ROOT", "1 Day", 70.0, 1),
                 ("BR MOD ROOT", "7 Days", 300.0, 1),
@@ -291,7 +302,6 @@ def init_db() -> None:
                 ("HG CHEATS PROXY", "30 Days", 790.0, 1),
 
                 # Out of Stock / Unpriced Default Items
-                ("BALA MOD MAIN ID", "1 Day", None, 0),
                 ("DRIP CLIENT APKMOD", "1 Day", None, 0),
                 ("DRIP CLIENT ROOT", "1 Day", None, 0),
                 ("ESIGN CERTIFICATE", "1 Day", None, 0),
@@ -304,8 +314,9 @@ def init_db() -> None:
                 ("SILENT CHEATS ROOT", "1 Day", None, 0),
             ]
             conn.executemany("""
-                INSERT OR IGNORE INTO panel_variants (product_name, duration, price, is_in_stock)
+                INSERT INTO panel_variants (product_name, duration, price, is_in_stock)
                 VALUES (?, ?, ?, ?)
+                ON CONFLICT(product_name, duration) DO UPDATE SET price = excluded.price, is_in_stock = excluded.is_in_stock;
             """, exact_variants)
 
             # Seed initial mobile brand catalog if empty
