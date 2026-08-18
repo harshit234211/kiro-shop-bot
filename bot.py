@@ -2306,7 +2306,7 @@ def main() -> None:
     application.add_error_handler(error_handler)
 
     logger.info("Kiro Shop Bot started polling...")
-    application.run_polling()
+    application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
