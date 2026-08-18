@@ -761,9 +761,9 @@ async def handle_tournament_app(update: Update, context: ContextTypes.DEFAULT_TY
     unlocked_msg = (
         f"🏆 *Frag Arena - Free Fire Tournament App*\n\n"
         f"🎮 *App Name:* Frag Arena\n"
-        f"📦 *Format:* Android APK Download\n"
-        f"⚡ *Features:* Daily Custom Rooms, Auto Match Scoring, Live Leaderboards & Instant Wallet Payouts!\n\n"
-        f"👇 Tap *📥 Download Frag Arena APK 📲* below to get the APK:"
+        f"📦 *Format:* Android APK\n"
+        f"⚡ *Features:* Daily Custom Rooms, Auto Match Scoring, Live Leaderboards & Instant Payouts!\n\n"
+        f"👇 Tap below to Download APK or Open Web App:"
     )
     keyboard = [
         [InlineKeyboardButton("📥 Download Frag Arena APK 📲", url=apk_url)],
@@ -771,10 +771,21 @@ async def handle_tournament_app(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
     ]
     markup = InlineKeyboardMarkup(keyboard)
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
+
+    query = update.callback_query
+    if query:
+        try:
+            await query.edit_message_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
+        except Exception:
+            try:
+                await context.bot.send_message(chat_id=user.id, text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
+            except Exception as e:
+                logger.error(f"Error sending tournament app msg: {e}")
     elif update.message:
-        await update.message.reply_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
+        try:
+            await update.message.reply_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
+        except Exception:
+            await context.bot.send_message(chat_id=user.id, text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
 
 async def handle_dk_ai_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles 🤖 DK AI Assistant feature access and ₹99 payment unlock."""
@@ -1037,6 +1048,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 )
     elif data == "view_history":
         await handle_deposit_history(update, context)
+    elif data in ["nav_tournament", "btn_tournament"]:
+        await handle_tournament_app(update, context)
     elif data == "nav_deposit_presets":
         user_record = db.get_or_create_user(user.id, user.username, user.first_name)
         balance = user_record.get("balance", 0.0)
