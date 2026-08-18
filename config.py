@@ -21,7 +21,8 @@ DB_PATH = os.getenv("DB_PATH", str(BASE_DIR / "data" / "kiro_shop.db"))
 MIN_DEPOSIT_AMOUNT = float(os.getenv("MIN_DEPOSIT_AMOUNT", "10.0"))
 
 # Payment Gateway Configuration (TranzUPI)
-TRANZUPI_API_KEY = os.getenv("TRANZUPI_API_KEY", "")
+key_env = os.getenv("TRANZUPI_API_KEY", "").strip()
+TRANZUPI_API_KEY = key_env if key_env else "64c1cb9202d9646a0a75a7781decf3ee"
 TRANZUPI_MERCHANT_ID = os.getenv("TRANZUPI_MERCHANT_ID", "")
 TRANZUPI_SECRET = os.getenv("TRANZUPI_SECRET", "")
 TRANZUPI_UPI_ID = os.getenv("TRANZUPI_UPI_ID", "paytm.s3h7hcx@pty")

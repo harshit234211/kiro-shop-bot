@@ -452,26 +452,22 @@ async def process_deposit_creation(update: Update, context: ContextTypes.DEFAULT
 
     reply_markup = InlineKeyboardMarkup(buttons)
 
+    qr_bytes = gtw.generate_qr_code_bytes(pay_details['upi_intent'])
     try:
         if update.callback_query:
             try:
                 await update.callback_query.message.delete()
             except Exception:
                 pass
-            await context.bot.send_message(
-                chat_id=user.id,
-                text=msg,
-                parse_mode="Markdown",
-                reply_markup=reply_markup
-            )
-        elif update.message:
-            await update.message.reply_text(
-                text=msg,
-                parse_mode="Markdown",
-                reply_markup=reply_markup
-            )
+        await context.bot.send_photo(
+            chat_id=user.id,
+            photo=qr_bytes,
+            caption=msg,
+            parse_mode="Markdown",
+            reply_markup=reply_markup
+        )
     except Exception as e:
-        logger.error(f"Error sending deposit text message: {e}")
+        logger.error(f"Error sending deposit QR photo message: {e}")
 
 async def handle_deposit_amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE, user_text: str) -> None:
     """Validates deposit input and creates pending deposit record."""
@@ -1511,7 +1507,18 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             [InlineKeyboardButton("⬅️ Main Menu", callback_data="nav_main")]
         ]
 
-        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
+        qr_bytes = gtw.generate_qr_code_bytes(pay_details['upi_intent'])
+        try:
+            await query.message.delete()
+        except Exception:
+            pass
+        await context.bot.send_photo(
+            chat_id=user.id,
+            photo=qr_bytes,
+            caption=msg,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
 
     elif data.startswith("pay_chk_"):
         order_id = data.replace("pay_chk_", "")

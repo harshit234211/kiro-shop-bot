@@ -4,10 +4,12 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --workers 1 --threads 4 --timeout 120
+    startCommand: python bot.py
     envVars:
       - key: BOT_TOKEN
         value: 8815350090:AAHcgEg8hp1tbGOjfGyIJq22VUa0ihCROXU
+      - key: TRANZUPI_API_KEY
+        value: 64c1cb9202d9646a0a75a7781decf3ee
       - key: ADMIN_USER_IDS
         value: "8568912134,8021345661"
       - key: TRANZUPI_UPI_ID
