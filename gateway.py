@@ -88,6 +88,9 @@ def create_tranzupi_payment_link(
         "remark": order_id
     }
 
+    fallback_pay_url = f"https://upiqr.in/api/qr?name={urllib.parse.quote(MERCHANT_NAME)}&vpa={upi_vpa}&amount={amount:.2f}&note={order_id}"
+    fallback_qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(fallback_intent)}"
+
     result_data = {
         "gateway": "TranzUPI",
         "order_id": order_id,
@@ -95,8 +98,8 @@ def create_tranzupi_payment_link(
         "currency": "INR",
         "upi_id": upi_vpa,
         "upi_intent": fallback_intent,
-        "payment_url": None,
-        "qr_code": None,
+        "payment_url": fallback_pay_url,
+        "qr_code": fallback_qr_url,
         "is_live_api": False
     }
 

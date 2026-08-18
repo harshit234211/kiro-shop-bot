@@ -442,14 +442,13 @@ async def process_deposit_creation(update: Update, context: ContextTypes.DEFAULT
         f"2️⃣ After payment, tap *🔄 Check Payment Status* to instantly credit your wallet balance!"
     )
 
-    buttons = []
-    pay_url = pay_details.get("payment_url")
-    if pay_url and (pay_url.startswith("http://") or pay_url.startswith("https://")):
-        buttons.append([InlineKeyboardButton("💳 Pay Now via UPI 📲", url=pay_url)])
-
-    buttons.append([InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"chk_status_{order_id}")])
-    buttons.append([InlineKeyboardButton("📜 View History", callback_data="view_history")])
-    buttons.append([InlineKeyboardButton("⬅️ Main Menu", callback_data="nav_main")])
+    pay_url = pay_details.get("payment_url") or f"https://upiqr.in/api/qr?name={urllib.parse.quote(MERCHANT_NAME)}&vpa={TRANZUPI_UPI_ID}&amount={amount:.2f}&note={order_id}"
+    buttons = [
+        [InlineKeyboardButton("💳 Pay Now via UPI 📲", url=pay_url)],
+        [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"chk_status_{order_id}")],
+        [InlineKeyboardButton("📜 View History", callback_data="view_history")],
+        [InlineKeyboardButton("⬅️ Main Menu", callback_data="nav_main")]
+    ]
 
     reply_markup = InlineKeyboardMarkup(buttons)
 
@@ -1505,13 +1504,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             f"2️⃣ After payment, tap *🔄 Check Payment Status*!"
         )
 
-        buttons = []
-        pay_url = pay_details.get("payment_url")
-        if pay_url and (pay_url.startswith("http://") or pay_url.startswith("https://")):
-            buttons.append([InlineKeyboardButton("💳 Pay Now via UPI 📲", url=pay_url)])
-
-        buttons.append([InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"pay_chk_{order_id}")])
-        buttons.append([InlineKeyboardButton("⬅️ Main Menu", callback_data="nav_main")])
+        pay_url = pay_details.get("payment_url") or f"https://upiqr.in/api/qr?name={urllib.parse.quote(MERCHANT_NAME)}&vpa={TRANZUPI_UPI_ID}&amount={amount:.2f}&note={order_id}"
+        buttons = [
+            [InlineKeyboardButton("💳 Pay Now via UPI 📲", url=pay_url)],
+            [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"pay_chk_{order_id}")],
+            [InlineKeyboardButton("⬅️ Main Menu", callback_data="nav_main")]
+        ]
 
         await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
