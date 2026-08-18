@@ -30,6 +30,7 @@ MERCHANT_NAME = os.getenv("MERCHANT_NAME", "RAJ NARAYAN")
 
 # Tournament App Configuration
 TOURNAMENT_APP_URL = os.getenv("TOURNAMENT_APP_URL", "https://t.me/KiroShopBot/app").strip()
+FRAG_ARENA_APK_URL = os.getenv("FRAG_ARENA_APK_URL", "https://kiro-shop-bot-55yr.onrender.com/download/frag_arena.apk").strip()
 
 # Admin Security Settings
 admin_ids_str = os.getenv("ADMIN_USER_IDS", "").strip()

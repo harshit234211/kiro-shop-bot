@@ -748,21 +748,26 @@ def get_tournament_checkout_keyboard(order_id: str, price: float = 99.0) -> Inli
     return InlineKeyboardMarkup(keyboard)
 
 async def handle_tournament_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles 🏆 Tournament App entry (Direct App Access)."""
+    """Handles 🏆 Tournament App entry (Frag Arena Direct APK & Web App Access)."""
     user = update.effective_user
     if not user:
         return
 
     db.get_or_create_user(user.id, user.username, user.first_name)
 
+    apk_url = config.FRAG_ARENA_APK_URL
     app_url = config.TOURNAMENT_APP_URL
+
     unlocked_msg = (
-        f"🏆 *Kiro Free Fire Tournament App*\n\n"
-        f"🎉 *Welcome to Tournament App!* Access daily custom rooms, automated match scoring, and prize leaderboards!\n\n"
-        f"👇 Tap *🏆 OPEN TOURNAMENT APP 🚀* below to launch:"
+        f"🏆 *Frag Arena - Free Fire Tournament App*\n\n"
+        f"🎮 *App Name:* Frag Arena\n"
+        f"📦 *Format:* Android APK Download\n"
+        f"⚡ *Features:* Daily Custom Rooms, Auto Match Scoring, Live Leaderboards & Instant Wallet Payouts!\n\n"
+        f"👇 Tap *📥 Download Frag Arena APK 📲* below to get the APK:"
     )
     keyboard = [
-        [InlineKeyboardButton("🏆 OPEN TOURNAMENT APP 🚀", url=app_url)],
+        [InlineKeyboardButton("📥 Download Frag Arena APK 📲", url=apk_url)],
+        [InlineKeyboardButton("🚀 Open Frag Arena Web App", url=app_url)],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
     ]
     markup = InlineKeyboardMarkup(keyboard)

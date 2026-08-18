@@ -36,6 +36,19 @@ def health_check():
         "bot_active": bot_started
     }), 200
 
+@app.route('/download/frag_arena.apk')
+def download_frag_arena_apk():
+    from flask import send_file
+    apk_path = os.path.join(os.path.dirname(__file__), "data", "frag_arena.apk")
+    if os.path.exists(apk_path):
+        return send_file(apk_path, as_attachment=True, download_name="FragArena_v1.0.apk")
+    return jsonify({
+        "status": "ONLINE",
+        "app": "Frag Arena Tournament App",
+        "download_url": "https://kiro-shop-bot-55yr.onrender.com/download/frag_arena.apk",
+        "message": "Frag Arena APK ready for download."
+    }), 200
+
 @app.route('/webhook/tranzupi', methods=['GET', 'POST'])
 def tranzupi_webhook():
     try:
