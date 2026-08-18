@@ -345,8 +345,85 @@ def init_db() -> None:
     finally:
         conn.close()
 
+def sync_user_balance_integrity(telegram_id: int) -> float:
+    """
+    Self-healing balance integrity check:
+    Calculates exact net balance = (Total Approved Deposits + Spin Rewards) - Total Completed Purchases.
+    If stored balance is less than calculated net balance, automatically heals and updates user balance.
+    Returns the verified wallet balance.
+    """
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        
+        # Ensure user exists first
+        cursor.execute("""
+            INSERT INTO users (telegram_id, username, first_name, balance)
+            VALUES (?, 'User', 'User', 0.0)
+            ON CONFLICT(telegram_id) DO NOTHING;
+        """, (telegram_id,))
+        
+        # 1. Total Successful Deposits
+        cursor.execute("SELECT SUM(amount) as total FROM deposits WHERE telegram_user_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        dep_row = cursor.fetchone()
+        tot_dep = float(dep_row["total"]) if (dep_row and dep_row["total"]) else 0.0
+        
+        # 2. Total Spin Rewards
+        cursor.execute("SELECT SUM(result) as total FROM spin_history WHERE telegram_id = ?", (telegram_id,))
+        spin_row = cursor.fetchone()
+        tot_spin = float(spin_row["total"]) if (spin_row and spin_row["total"]) else 0.0
+
+        # 3. Total Sensi Spent
+        cursor.execute("SELECT SUM(price) as total FROM sensi_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        sensi_row = cursor.fetchone()
+        tot_sensi = float(sensi_row["total"]) if (sensi_row and sensi_row["total"]) else 0.0
+
+        # 4. Total Panel Spent
+        cursor.execute("SELECT SUM(price) as total FROM panel_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        panel_row = cursor.fetchone()
+        tot_panel = float(panel_row["total"]) if (panel_row and panel_row["total"]) else 0.0
+
+        # 5. Total Tournament Spent
+        cursor.execute("SELECT SUM(price) as total FROM tournament_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        trn_row = cursor.fetchone()
+        tot_trn = float(trn_row["total"]) if (trn_row and trn_row["total"]) else 0.0
+
+        # 6. Total DK AI Spent
+        cursor.execute("SELECT SUM(price) as total FROM dk_ai_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        dk_row = cursor.fetchone()
+        tot_dk = float(dk_row["total"]) if (dk_row and dk_row["total"]) else 0.0
+
+        # 7. Total Gmail Spent
+        cursor.execute("SELECT SUM(amount) as total FROM gmail_recovery_requests WHERE telegram_id = ? AND status IN ('UNDER_REVIEW', 'COMPLETED', 'PAID')", (telegram_id,))
+        gmail_row = cursor.fetchone()
+        tot_gmail = float(gmail_row["total"]) if (gmail_row and gmail_row["total"]) else 0.0
+
+        calculated_net_balance = max(0.0, (tot_dep + tot_spin) - (tot_sensi + tot_panel + tot_trn + tot_dk + tot_gmail))
+
+        cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
+        user_row = cursor.fetchone()
+        current_bal = float(user_row["balance"]) if user_row else 0.0
+
+        if calculated_net_balance > current_bal:
+            with conn:
+                conn.execute("""
+                    UPDATE users
+                    SET balance = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE telegram_id = ?
+                """, (calculated_net_balance, telegram_id))
+            logger.info(f"🛡️ [BALANCE HEALED] User {telegram_id}: Stored={current_bal:.2f} -> Healed={calculated_net_balance:.2f}")
+            return calculated_net_balance
+
+        return current_bal
+    except Exception as e:
+        logger.error(f"Error in sync_user_balance_integrity for {telegram_id}: {e}")
+        return 0.0
+    finally:
+        conn.close()
+
 def get_or_create_user(telegram_id: int, username: Optional[str] = None, first_name: Optional[str] = None) -> Dict[str, Any]:
     """Retrieves existing user or registers new user with server-side 0.0 balance."""
+    sync_user_balance_integrity(telegram_id)
     conn = get_connection()
     try:
         cursor = conn.cursor()
@@ -354,12 +431,13 @@ def get_or_create_user(telegram_id: int, username: Optional[str] = None, first_n
         row = cursor.fetchone()
         
         if row:
-            # Update user info if changed
             if row["username"] != username or row["first_name"] != first_name:
                 with conn:
                     conn.execute("""
                         UPDATE users SET username = ?, first_name = ?, updated_at = CURRENT_TIMESTAMP WHERE telegram_id = ?
                     """, (username, first_name, telegram_id))
+                cursor.execute("SELECT id, telegram_id, username, first_name, balance, created_at, updated_at FROM users WHERE telegram_id = ?", (telegram_id,))
+                row = cursor.fetchone()
             return dict(row)
         else:
             with conn:
@@ -378,16 +456,7 @@ def get_or_create_user(telegram_id: int, username: Optional[str] = None, first_n
 
 def get_user_balance(telegram_id: int) -> float:
     """Retrieves server-side stored wallet balance for user."""
-    conn = get_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
-        row = cursor.fetchone()
-        if row:
-            return float(row["balance"])
-        return 0.0
-    finally:
-        conn.close()
+    return sync_user_balance_integrity(telegram_id)
 
 def create_deposit(telegram_user_id: int, amount: float, order_id: str, gateway: str = "TranzUPI") -> Dict[str, Any]:
     """Creates a new PENDING deposit record."""
@@ -478,6 +547,13 @@ def credit_wallet_transaction(
 
         # ATOMIC TRANSACTION: Update user balance and deposit status in single transaction
         with conn:
+            # 0. Ensure user record exists
+            cursor.execute("""
+                INSERT INTO users (telegram_id, username, first_name, balance)
+                VALUES (?, 'User', 'User', 0.0)
+                ON CONFLICT(telegram_id) DO NOTHING;
+            """, (telegram_user_id,))
+
             # 1. Update deposit status first with status check
             cursor.execute("""
                 UPDATE deposits
@@ -501,6 +577,7 @@ def credit_wallet_transaction(
                 WHERE telegram_id = ?
             """, (expected_amount, telegram_user_id))
 
+        sync_user_balance_integrity(telegram_user_id)
         logger.info(f"Wallet credit SUCCESS: Order={order_id}, User={telegram_user_id}, Credited=₹{expected_amount:.2f}")
         return True, "Wallet credited successfully"
     except Exception as e:

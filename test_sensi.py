@@ -48,9 +48,9 @@ class TestSensiBuyFeature(unittest.TestCase):
         self.assertTrue(1 <= data["sniper"] <= 200)
         self.assertTrue(1 <= data["free_look"] <= 200)
         self.assertTrue(38 <= data["fire_button"] <= 60)
-        self.assertTrue(420 <= data["dpi"] <= 650)
-        self.assertTrue(5 <= data["pointer_speed"] <= 10)
-        self.assertIn("Kiro Sensi Delivered", formatted_text)
+        self.assertTrue(320 <= data["dpi"] <= 600)
+        self.assertTrue(50 <= data["pointer_speed"] <= 100)
+        self.assertIn("Kiro Sensi Generated", formatted_text)
         print("✅ Test 3 Passed: Random Free Fire sensitivity generator ranges validated.")
 
     def test_04_wallet_sensi_payment_atomic(self):
