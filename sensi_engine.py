@@ -70,3 +70,8 @@ def generate_ff_sensitivity(telegram_id: int, order_id: str, brand: str, model: 
 
     logger.info(f"Generated FF Sensitivity for Order {order_id} ({model} {variant})")
     return data, formatted_msg
+
+def generate_sensi_profile(order_id: str, telegram_id: int, brand: str, model: str, variant: str) -> Dict[str, Any]:
+    """Alias wrapper returning sensitivity data dictionary."""
+    data, _ = generate_ff_sensitivity(telegram_id=telegram_id, order_id=order_id, brand=brand, model=model, variant=variant)
+    return data

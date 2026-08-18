@@ -231,8 +231,8 @@ def init_db() -> None:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_spin_history_user ON spin_history(telegram_id, created_at DESC);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);")
 
-            # Seed default Sensi price (₹49.0) and Gmail fee (₹299.0)
-            conn.execute("INSERT INTO sensi_settings (key, value) VALUES ('sensi_price', '49.0') ON CONFLICT(key) DO UPDATE SET value = '49.0';")
+            # Seed default Sensi price (₹59.0) and Gmail fee (₹299.0)
+            conn.execute("INSERT INTO sensi_settings (key, value) VALUES ('sensi_price', '59.0') ON CONFLICT(key) DO UPDATE SET value = '59.0';")
             conn.execute("INSERT OR IGNORE INTO sensi_settings (key, value) VALUES ('gmail_fee', '299.0');")
 
             # Seed 16 initial unique panel products if catalog is empty
