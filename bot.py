@@ -244,32 +244,28 @@ def get_sensi_variant_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 def get_unified_payment_keyboard(order_id: str, price: float, back_callback: str = "nav_main") -> InlineKeyboardMarkup:
-    """Returns the standardized, reusable payment options keyboard for all paid features."""
+    """Returns TranzUPI payment option for all paid features."""
     keyboard = [
-        [InlineKeyboardButton(f"💰 Pay From Wallet (₹{price:.0f})", callback_data=f"pay_wal_{order_id}")],
-        [InlineKeyboardButton(f"🏦 Pay With UPI (₹{price:.0f})", callback_data=f"pay_upi_{order_id}")],
+        [InlineKeyboardButton(f"🏦 Pay via TranzUPI (₹{price:.0f})", callback_data=f"pay_upi_{order_id}")],
         [InlineKeyboardButton("⬅️ Back", callback_data=back_callback)]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 async def render_unified_payment_screen(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str, item_name: str, price: float, back_callback: str = "nav_main") -> None:
-    """Renders the standardized reusable payment card across all paid features."""
+    """Renders the TranzUPI payment card across all paid features."""
     user = update.effective_user
     if not user:
         return
 
-    user_rec = db.get_or_create_user(user.id, user.username, user.first_name)
-    user_bal = user_rec.get("balance", 0.0)
-
     msg = (
         f"━━━━━━━━━━━━━━━━\n"
-        f"💳 *PAYMENT*\n"
+        f"💳 *PAYMENT VIA TRANZUPI*\n"
         f"━━━━━━━━━━━━━━━━\n\n"
         f"📦 *Item:* `{item_name}`\n"
         f"💰 *Amount:* ₹{price:.0f}\n"
         f"🆔 *Order ID:* `{order_id}`\n\n"
-        f"💳 *Your Wallet Balance:* ₹{user_bal:.2f}\n\n"
-        f"👇 *Choose Payment Method:*"
+        f"🏦 *Payment Gateway:* TranzUPI (Live)\n\n"
+        f"👇 *Click below to proceed to TranzUPI payment:*"
     )
 
     markup = get_unified_payment_keyboard(order_id=order_id, price=price, back_callback=back_callback)
