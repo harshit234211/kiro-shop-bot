@@ -8,7 +8,11 @@ env_path = BASE_DIR / ".env"
 load_dotenv(dotenv_path=env_path)
 
 # Bot Configuration
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
+token_env = os.getenv("BOT_TOKEN", "").strip()
+if not token_env or token_env == "YOUR_TELEGRAM_BOT_TOKEN_HERE":
+    BOT_TOKEN = "8815350090:AAHcgEg8hp1tbGOjfGyIJq22VUa0ihCROXU"
+else:
+    BOT_TOKEN = token_env
 
 # Database Configuration
 DB_PATH = os.getenv("DB_PATH", str(BASE_DIR / "data" / "kiro_shop.db"))
@@ -24,8 +28,11 @@ TRANZUPI_UPI_ID = os.getenv("TRANZUPI_UPI_ID", "paytm.s3h7hcx@pty")
 MERCHANT_NAME = os.getenv("MERCHANT_NAME", "RAJ NARAYAN")
 
 # Admin Security Settings
-admin_ids_str = os.getenv("ADMIN_USER_IDS", "")
-ADMIN_USER_IDS = [int(x.strip()) for x in admin_ids_str.split(",") if x.strip().isdigit()]
+admin_ids_str = os.getenv("ADMIN_USER_IDS", "").strip()
+if admin_ids_str:
+    ADMIN_USER_IDS = [int(x.strip()) for x in admin_ids_str.split(",") if x.strip().isdigit()]
+else:
+    ADMIN_USER_IDS = [8568912134, 8021345661]
 
 def is_admin(telegram_id: int) -> bool:
     """Checks if telegram_id is authorized in ADMIN_USER_IDS."""
