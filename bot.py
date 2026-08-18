@@ -190,9 +190,11 @@ def get_numeric_keypad_keyboard(current_val: str = "0") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 def get_sensi_brands_keyboard() -> InlineKeyboardMarkup:
-    """Returns all mobile brands in a single-screen 2-column compact grid (No Pagination)."""
+    """Returns all mobile brands in a single-screen 2-column compact grid with custom input option."""
     all_brands = db.get_sensi_brands()
-    keyboard = []
+    keyboard = [
+        [InlineKeyboardButton("✏️ Type Custom Phone Name 📱", callback_data="sb_custom_input")]
+    ]
     row = []
     for brand in all_brands:
         row.append(InlineKeyboardButton(f"📱 {brand}", callback_data=f"sb_b_{brand}"))
@@ -914,6 +916,35 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
             await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=get_gmail_checkout_keyboard(order_id, fee))
             return
 
+    # Check if user is in custom Sensi phone input flow
+    if context.user_data.get("awaiting_sensi_phone"):
+        if text.startswith("⬅️") or text in ["💳 Deposit", "📜 Deposit History", "💰 Wallet Balance"]:
+            context.user_data["awaiting_sensi_phone"] = False
+        else:
+            phone_name = text.strip()
+            context.user_data["awaiting_sensi_phone"] = False
+            price = db.get_sensi_price()
+            order_id = gtw.generate_order_id().replace("KIR-", "SENSI-")
+            db.create_sensi_order(
+                telegram_id=user.id,
+                brand="Custom Phone",
+                model=phone_name,
+                ram="Standard",
+                storage="Standard",
+                payment_method="PENDING",
+                price=price,
+                order_id=order_id
+            )
+            await render_unified_payment_screen(
+                update=update,
+                context=context,
+                order_id=order_id,
+                item_name=f"Free Fire Sensi ({phone_name})",
+                price=price,
+                back_callback="nav_main"
+            )
+            return
+
     # Handle main navigation buttons
     if text == "💳 Deposit":
         await handle_deposit_click(update, context)
@@ -1101,6 +1132,14 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             await query.answer("⌛ Payment not completed yet! Please complete payment via UPI app first, then tap Check Payment Status.", show_alert=True)
 
     # --- SENSI BUY CALLBACK HANDLERS ---
+    elif data == "sb_custom_input":
+        context.user_data["awaiting_sensi_phone"] = True
+        msg = (
+            f"✏️ *Custom Phone / Device Name*\n\n"
+            f"Please type your exact Phone Model or Device Name below:\n\n"
+            f"Example: `Vivo T4x 5G` or `iPhone 15 Pro Max`"
+        )
+        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
     elif data == "sb_b_back":
         await handle_sensi_start(update, context)
     elif data == "sb_m_back":
