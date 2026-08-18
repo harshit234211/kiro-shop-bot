@@ -2271,6 +2271,15 @@ from webhook_server import run_webhook_server
 
 def main() -> None:
     """Bot launcher."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("Event loop is closed")
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
     logger.info("Initializing database...")
     db.init_db()
 
@@ -2306,7 +2315,10 @@ def main() -> None:
     application.add_error_handler(error_handler)
 
     logger.info("Kiro Shop Bot started polling...")
-    application.run_polling(drop_pending_updates=True)
+    try:
+        application.run_polling(drop_pending_updates=True, stop_signals=None)
+    except Exception as e:
+        logger.error(f"Error in run_polling: {e}", exc_info=e)
 
 if __name__ == "__main__":
     main()
