@@ -747,28 +747,22 @@ def get_tournament_checkout_keyboard(order_id: str, price: float = 99.0) -> Inli
     return InlineKeyboardMarkup(keyboard)
 
 async def handle_tournament_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles 🏆 Tournament App entry (Frag Arena Direct APK & Web App Access)."""
+    """Handles 🏆 Tournament App entry (Direct Telegram Group Access)."""
     user = update.effective_user
     if not user:
         return
 
     db.get_or_create_user(user.id, user.username, user.first_name)
 
-    apk_url = config.FRAG_ARENA_APK_URL
-    app_url = config.TOURNAMENT_APP_URL
     group_url = "https://t.me/+4RKa1Af80ghiMTY1"
 
     unlocked_msg = (
-        f"🏆 *Frag Arena - Free Fire Tournament App*\n\n"
-        f"🎮 *App Name:* Frag Arena\n"
-        f"📦 *Format:* Android APK\n"
-        f"⚡ *Features:* Daily Custom Rooms, Auto Match Scoring, Live Leaderboards & Instant Payouts!\n\n"
-        f"👇 Tap below to Join Telegram Group, Download APK, or Open Web App:"
+        f"🏆 *Kiro Free Fire Tournament App*\n\n"
+        f"🎉 *100% Free Access!* Join our official tournament community for daily matches, custom rooms, and prizes!\n\n"
+        f"👇 Tap below to enter:"
     )
     keyboard = [
-        [InlineKeyboardButton("💬 Join Tournament Group 👥", url=group_url)],
-        [InlineKeyboardButton("📥 Download Frag Arena APK 📲", url=apk_url)],
-        [InlineKeyboardButton("🚀 Open Frag Arena Web App", url=app_url)],
+        [InlineKeyboardButton("🏆 JOIN TOURNAMENT 🚀", url=group_url)],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
     ]
     markup = InlineKeyboardMarkup(keyboard)
