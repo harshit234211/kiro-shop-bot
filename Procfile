@@ -1,2 +1,1 @@
-worker: python bot.py
-web: python webhook_server.py
+web: gunicorn app:app --workers 1 --threads 4 --timeout 120
