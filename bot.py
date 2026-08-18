@@ -252,39 +252,37 @@ def get_unified_payment_keyboard(order_id: str, price: float, back_callback: str
     return InlineKeyboardMarkup(keyboard)
 
 async def render_unified_payment_screen(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str, item_name: str, price: float, back_callback: str = "nav_main") -> None:
-    """Renders the exact same TranzUPI payment card as Deposit across all paid features."""
+    """Renders the Wallet Payment card across all paid features."""
     user = update.effective_user
     if not user:
         return
 
-    pay_details = gtw.create_tranzupi_payment_order(
-        amount=price,
-        order_id=order_id,
-        customer_name=user.first_name or "Kiro User",
-        customer_email=f"user_{user.id}@kiroshop.bot",
-        customer_mobile="9999999999"
-    )
-
-    pay_url = pay_details.get("payment_url") or f"https://upiqr.in/api/qr?name={urllib.parse.quote(MERCHANT_NAME)}&vpa={TRANZUPI_UPI_ID}&amount={price:.2f}&note={order_id}"
+    user_rec = db.get_or_create_user(user.id, user.username, user.first_name)
+    user_bal = float(user_rec.get("balance", 0.0))
 
     msg = (
-        f"💳 *Kiro Shop Payment Initiated*\n\n"
+        f"━━━━━━━━━━━━━━━━\n"
+        f"💳 *WALLET PAYMENT*\n"
+        f"━━━━━━━━━━━━━━━━\n\n"
         f"📦 *Item:* `{item_name}`\n"
-        f"💰 *Amount:* ₹{price:.0f}\n"
-        f"🆔 *Order ID:* `{order_id}`\n"
-        f"📌 *Status:* PENDING\n"
-        f"🏦 *Gateway:* TranzUPI (Live)\n\n"
-        f"📲 *UPI Payment String:*\n`{pay_details['upi_intent']}`\n\n"
-        f"⚠️ *Instructions:*\n"
-        f"1️⃣ Tap *💳 Pay Now via UPI 📲* button below to complete payment in Paytm / PhonePe / GPay.\n"
-        f"2️⃣ After payment, tap *🔄 Check Payment Status* to instantly complete your order!"
+        f"💰 *Price:* ₹{price:.0f}\n"
+        f"🆔 *Order ID:* `{order_id}`\n\n"
+        f"💰 *Your Wallet Balance:* ₹{user_bal:.2f}\n\n"
     )
 
-    buttons = [
-        [InlineKeyboardButton("💳 Pay Now via UPI 📲", url=pay_url)],
-        [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"pay_chk_{order_id}")],
-        [InlineKeyboardButton("⬅️ Main Menu", callback_data="nav_main")]
-    ]
+    if user_bal >= price:
+        msg += f"✅ *Sufficient Balance!* Tap *💰 Pay From Wallet* below to complete your order instantly."
+        buttons = [
+            [InlineKeyboardButton(f"💰 Pay From Wallet (₹{price:.0f})", callback_data=f"pay_wal_{order_id}")],
+            [InlineKeyboardButton("⬅️ Back to Menu", callback_data=back_callback)]
+        ]
+    else:
+        diff = price - user_bal
+        msg += f"❌ *Insufficient Wallet Balance!*\nRequired: ₹{price:.0f} | Shortage: ₹{diff:.2f}\n\nTap *💳 Add Funds to Wallet* below to deposit via TranzUPI!"
+        buttons = [
+            [InlineKeyboardButton("💳 Add Funds to Wallet", callback_data="nav_deposit_presets")],
+            [InlineKeyboardButton("⬅️ Back to Menu", callback_data=back_callback)]
+        ]
 
     markup = InlineKeyboardMarkup(buttons)
     if update.callback_query:
@@ -1097,6 +1095,17 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_numeric_keypad_keyboard(current))
         except Exception:
             pass
+    elif data == "nav_deposit_presets":
+        user_record = db.get_or_create_user(user.id, user.username, user.first_name)
+        balance = user_record.get("balance", 0.0)
+        msg = (
+            f"💳 *Kiro Shop Wallet Deposit*\n\n"
+            f"👤 *User:* {user.first_name}\n"
+            f"💰 *Current Balance:* ₹{balance:.2f}\n\n"
+            f"👇 Select a deposit amount below to add funds via TranzUPI:"
+        )
+        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_deposit_options_keyboard())
+
     elif data.startswith("chk_status_"):
         target_order = data.replace("chk_status_", "")
         dep = db.get_deposit_by_order_id(target_order)
