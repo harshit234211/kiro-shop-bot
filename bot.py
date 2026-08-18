@@ -748,43 +748,27 @@ def get_tournament_checkout_keyboard(order_id: str, price: float = 99.0) -> Inli
     return InlineKeyboardMarkup(keyboard)
 
 async def handle_tournament_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handles 🏆 Tournament App entry and ₹99 payment unlock."""
+    """Handles 🏆 Tournament App entry (100% Free direct access)."""
     user = update.effective_user
     if not user:
         return
 
     db.get_or_create_user(user.id, user.username, user.first_name)
 
-    # Check if user has already unlocked access previously
-    if db.has_user_unlocked_tournament(user.id):
-        unlocked_msg = (
-            f"✅ *Tournament Entry Unlocked*\n\n"
-            f"🏆 *Tournament App*\n\n"
-            f"👇 Click below to enter the tournament community:"
-        )
-        keyboard = [
-            [InlineKeyboardButton("🏆 JOIN TOURNAMENT", url="https://t.me/+4RKa1Af80ghiMTY1")],
-            [InlineKeyboardButton("⬅️ Back", callback_data="nav_main")]
-        ]
-        markup = InlineKeyboardMarkup(keyboard)
-        if update.callback_query:
-            await update.callback_query.edit_message_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
-        elif update.message:
-            await update.message.reply_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
-        return
-
-    # Not unlocked yet -> Create pending order and show ₹99 payment screen
-    order_id = gtw.generate_order_id().replace("KIR-", "TRN-")
-    db.create_tournament_order(telegram_id=user.id, price=99.0, order_id=order_id, payment_method="PENDING")
-
-    await render_unified_payment_screen(
-        update=update,
-        context=context,
-        order_id=order_id,
-        item_name="Tournament App Entry",
-        price=99.0,
-        back_callback="nav_main"
+    unlocked_msg = (
+        f"🏆 *Kiro Free Fire Tournament App*\n\n"
+        f"🎉 *100% Free Access!* Join our official tournament community for daily matches, custom rooms, and prizes!\n\n"
+        f"👇 Tap below to enter:"
     )
+    keyboard = [
+        [InlineKeyboardButton("🏆 JOIN TOURNAMENT 🚀", url="https://t.me/+4RKa1Af80ghiMTY1")],
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
+    elif update.message:
+        await update.message.reply_text(text=unlocked_msg, parse_mode="Markdown", reply_markup=markup)
 
 async def handle_dk_ai_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handles 🤖 DK AI Assistant feature access and ₹99 payment unlock."""
