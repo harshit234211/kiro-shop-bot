@@ -853,6 +853,23 @@ def get_gmail_request_by_id(order_id: str) -> Optional[Dict[str, Any]]:
     finally:
         conn.close()
 
+def update_gmail_recovery_email(order_id: str, email: str) -> bool:
+    """Updates target Gmail address for a paid recovery request."""
+    conn = get_connection()
+    try:
+        with conn:
+            conn.execute("""
+                UPDATE gmail_recovery_requests
+                SET email = ?, status = 'UNDER_REVIEW', updated_at = CURRENT_TIMESTAMP
+                WHERE order_id = ?
+            """, (email.strip(), order_id))
+        return True
+    except Exception as e:
+        logger.error(f"Error updating email for order {order_id}: {e}")
+        return False
+    finally:
+        conn.close()
+
 def process_wallet_gmail_recovery_payment(order_id: str) -> Tuple[bool, str]:
     """
     Atomically deducts wallet balance for Gmail Recovery service and updates status to UNDER_REVIEW.

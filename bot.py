@@ -897,29 +897,36 @@ async def handle_text_messages(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
             email = text.strip()
             context.user_data["awaiting_gmail_email"] = False
-            problem = context.user_data.get("gmail_problem", "Lost Recovery Phone / 2FA Access")
+            order_id = context.user_data.get("gmail_order_id")
 
-            fee = db.get_gmail_fee()
-            order_id = gtw.generate_order_id().replace("KIR-", "KR-")
-
-            db.create_gmail_recovery_request(
-                telegram_id=user.id,
-                email=email,
-                problem_description=problem,
-                order_id=order_id,
-                payment_method="PENDING",
-                amount=fee
-            )
+            if order_id:
+                db.update_gmail_recovery_email(order_id, email)
+                req = db.get_gmail_request_by_id(order_id)
+                problem = req["problem_description"] if req else "Account Recovery"
+                fee = req["amount"] if req else 299.0
+            else:
+                problem = context.user_data.get("gmail_problem", "Account Recovery")
+                fee = 299.0
+                order_id = gtw.generate_order_id().replace("KIR-", "KR-")
+                db.create_gmail_recovery_request(
+                    telegram_id=user.id,
+                    email=email,
+                    problem_description=problem,
+                    order_id=order_id,
+                    payment_method="WALLET",
+                    amount=fee
+                )
+                db.mark_gmail_recovery_paid(order_id)
 
             msg = (
-                f"📧 *Gmail Recovery Request Summary*\n\n"
+                f"🎉 *Gmail Recovery Request Submitted!*\n\n"
                 f"📧 *Target Email:* `{email}`\n"
                 f"📝 *Account Issue:* {problem}\n"
-                f"💰 *Service Fee:* ₹{fee:.0f}\n"
-                f"🆔 *Order ID:* `{order_id}`\n\n"
-                f"*Choose payment method below to submit your request:*"
+                f"💰 *Fee Paid:* ₹{fee:.0f} (Wallet)\n"
+                f"🆔 *Request ID:* `{order_id}`\n\n"
+                f"Our technical support team has received your request and will start the recovery process shortly!"
             )
-            await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=get_gmail_checkout_keyboard(order_id, fee))
+            await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=get_main_keyboard())
             return
 
     # Check if user is in custom Sensi phone input flow
@@ -1440,16 +1447,22 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
         elif order_id.startswith("KR-"):
             success, msg_res = db.process_wallet_gmail_recovery_payment(order_id)
             if success:
-                await query.answer("🎉 Payment Successful! Request submitted.", show_alert=True)
-                confirmed_msg = (
-                    f"✅ *Payment Successful*\n\n"
-                    f"Your recovery request has been submitted.\n\n"
-                    f"🆔 *Request ID:* `{order_id}`\n\n"
-                    f"Our support team will review your request."
+                await query.answer("🎉 Payment Successful (₹299)! Please type your Gmail address.", show_alert=True)
+                context.user_data["awaiting_gmail_email"] = True
+                context.user_data["gmail_order_id"] = order_id
+                send_gmail_msg = (
+                    f"✅ *Payment Successful (₹299)*\n\n"
+                    f"📧 *Step 2: Enter Target Gmail Address*\n\n"
+                    f"Please type your Target Gmail Address below:\n\n"
+                    f"Example: `target@gmail.com`"
                 )
-                await query.edit_message_text(text=confirmed_msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
+                await query.edit_message_text(text=send_gmail_msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
             else:
-                await query.answer(f"❌ {msg_res}", show_alert=True)
+                if msg_res.startswith("INSUFFICIENT_BALANCE|"):
+                    details = msg_res.split("|", 1)[1]
+                    await query.answer(f"❌ Insufficient Balance\n\n{details}", show_alert=True)
+                else:
+                    await query.answer(f"❌ {msg_res}", show_alert=True)
 
         # 5. Panel Buy Order
         elif order_id.startswith("PNL-"):
@@ -1715,17 +1728,26 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     elif data.startswith("gr_prob_"):
         problem_choice = data.replace("gr_prob_", "")
         context.user_data["gmail_problem"] = problem_choice
-        context.user_data["awaiting_gmail_email"] = True
 
         fee = db.get_gmail_fee()
-        msg = (
-            f"📧 *Gmail Recovery Request*\n\n"
-            f"📝 *Selected Issue:* {problem_choice}\n"
-            f"💰 *Service Fee:* ₹{fee:.0f}\n\n"
-            f"📧 *Step 2:* Please type your Target Gmail Address below:\n\n"
-            f"Example: `target@gmail.com`"
+        order_id = gtw.generate_order_id().replace("KIR-", "KR-")
+        db.create_gmail_recovery_request(
+            telegram_id=user.id,
+            email="AWAITING_INPUT",
+            problem_description=problem_choice,
+            order_id=order_id,
+            payment_method="WALLET",
+            amount=fee
         )
-        await query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
+
+        await render_unified_payment_screen(
+            update=update,
+            context=context,
+            order_id=order_id,
+            item_name=f"Gmail Recovery ({problem_choice})",
+            price=fee,
+            back_callback="nav_main"
+        )
 
     elif data.startswith("gr_wal_"):
         order_id = data.replace("gr_wal_", "")
