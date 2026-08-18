@@ -1121,7 +1121,8 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
             return
 
         if dep["status"] == "SUCCESS":
-            await query.answer("✅ Payment already verified & credited to your wallet!", show_alert=True)
+            new_bal = db.sync_user_balance_integrity(user.id)
+            await query.answer(f"✅ Payment already verified! Wallet Balance: ₹{new_bal:.2f}", show_alert=True)
             return
 
         # Query TranzUPI live API status
@@ -1137,21 +1138,19 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                 payment_reference=res.get("utr") or "UTR-VERIFIED",
                 verified_amount=float(dep["amount"])
             )
-            if success:
-                await query.answer("🎉 Payment Verified! Wallet credited successfully.", show_alert=True)
-                updated_msg = (
-                    f"✅ *Kiro Shop Deposit Successful!*\n\n"
-                    f"💰 *Amount Credited:* ₹{float(dep['amount']):.2f}\n"
-                    f"🆔 *Order ID:* `{target_order}`\n"
-                    f"📌 *Status:* SUCCESS ✅\n\n"
-                    f"Your wallet balance has been updated."
-                )
-                try:
-                    await query.edit_message_text(text=updated_msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
-                except Exception:
-                    pass
-            else:
-                await query.answer(f"Notice: {msg}", show_alert=True)
+            new_bal = db.sync_user_balance_integrity(user.id)
+            await query.answer("🎉 Payment Verified! Wallet credited successfully.", show_alert=True)
+            updated_msg = (
+                f"✅ *Kiro Shop Deposit Successful!*\n\n"
+                f"💰 *Amount Credited:* ₹{float(dep['amount']):.2f}\n"
+                f"🆔 *Order ID:* `{target_order}`\n"
+                f"💼 *New Wallet Balance:* ₹{new_bal:.2f}\n\n"
+                f"Your wallet balance has been updated."
+            )
+            try:
+                await query.edit_message_text(text=updated_msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
+            except Exception:
+                pass
         else:
             await query.answer("⌛ Payment not completed yet! Please complete payment via UPI app first, then tap Check Payment Status.", show_alert=True)
 

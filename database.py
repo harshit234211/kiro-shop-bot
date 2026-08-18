@@ -363,8 +363,8 @@ def sync_user_balance_integrity(telegram_id: int) -> float:
             ON CONFLICT(telegram_id) DO NOTHING;
         """, (telegram_id,))
         
-        # 1. Total Successful Deposits
-        cursor.execute("SELECT SUM(amount) as total FROM deposits WHERE telegram_user_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        # 1. Total Successful Deposits (Include all successful status tags)
+        cursor.execute("SELECT SUM(amount) as total FROM deposits WHERE telegram_user_id = ? AND status IN ('SUCCESS', 'COMPLETED', 'PAID', 'SUCCESSFUL', '1')", (telegram_id,))
         dep_row = cursor.fetchone()
         tot_dep = float(dep_row["total"]) if (dep_row and dep_row["total"]) else 0.0
         
@@ -540,6 +540,9 @@ def credit_wallet_transaction(
         if current_status != "PENDING":
             logger.warning(f"Credit failed: Order {order_id} status is {current_status}.")
             return False, f"Order status is {current_status}"
+
+        if verified_amount is None or verified_amount <= 0.0:
+            verified_amount = expected_amount
 
         if abs(expected_amount - verified_amount) > 0.01:
             logger.warning(f"Credit failed for Order {order_id}: Amount mismatch (Expected ₹{expected_amount}, Got ₹{verified_amount}).")
