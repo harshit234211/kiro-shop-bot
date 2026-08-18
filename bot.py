@@ -252,23 +252,41 @@ def get_unified_payment_keyboard(order_id: str, price: float, back_callback: str
     return InlineKeyboardMarkup(keyboard)
 
 async def render_unified_payment_screen(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str, item_name: str, price: float, back_callback: str = "nav_main") -> None:
-    """Renders the TranzUPI payment card across all paid features."""
+    """Renders the exact same TranzUPI payment card as Deposit across all paid features."""
     user = update.effective_user
     if not user:
         return
 
-    msg = (
-        f"━━━━━━━━━━━━━━━━\n"
-        f"💳 *PAYMENT VIA TRANZUPI*\n"
-        f"━━━━━━━━━━━━━━━━\n\n"
-        f"📦 *Item:* `{item_name}`\n"
-        f"💰 *Amount:* ₹{price:.0f}\n"
-        f"🆔 *Order ID:* `{order_id}`\n\n"
-        f"🏦 *Payment Gateway:* TranzUPI (Live)\n\n"
-        f"👇 *Click below to proceed to TranzUPI payment:*"
+    pay_details = gtw.create_tranzupi_payment_order(
+        amount=price,
+        order_id=order_id,
+        customer_name=user.first_name or "Kiro User",
+        customer_email=f"user_{user.id}@kiroshop.bot",
+        customer_mobile="9999999999"
     )
 
-    markup = get_unified_payment_keyboard(order_id=order_id, price=price, back_callback=back_callback)
+    pay_url = pay_details.get("payment_url") or f"https://upiqr.in/api/qr?name={urllib.parse.quote(MERCHANT_NAME)}&vpa={TRANZUPI_UPI_ID}&amount={price:.2f}&note={order_id}"
+
+    msg = (
+        f"💳 *Kiro Shop Payment Initiated*\n\n"
+        f"📦 *Item:* `{item_name}`\n"
+        f"💰 *Amount:* ₹{price:.0f}\n"
+        f"🆔 *Order ID:* `{order_id}`\n"
+        f"📌 *Status:* PENDING\n"
+        f"🏦 *Gateway:* TranzUPI (Live)\n\n"
+        f"📲 *UPI Payment String:*\n`{pay_details['upi_intent']}`\n\n"
+        f"⚠️ *Instructions:*\n"
+        f"1️⃣ Tap *💳 Pay Now via UPI 📲* button below to complete payment in Paytm / PhonePe / GPay.\n"
+        f"2️⃣ After payment, tap *🔄 Check Payment Status* to instantly complete your order!"
+    )
+
+    buttons = [
+        [InlineKeyboardButton("💳 Pay Now via UPI 📲", url=pay_url)],
+        [InlineKeyboardButton("🔄 Check Payment Status", callback_data=f"pay_chk_{order_id}")],
+        [InlineKeyboardButton("⬅️ Main Menu", callback_data="nav_main")]
+    ]
+
+    markup = InlineKeyboardMarkup(buttons)
     if update.callback_query:
         await update.callback_query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=markup)
     elif update.message:
