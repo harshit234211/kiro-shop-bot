@@ -374,38 +374,38 @@ def sync_user_balance_integrity(telegram_id: int) -> float:
             ON CONFLICT(telegram_id) DO NOTHING;
         """, (telegram_id,))
         
-        # 1. Total Successful Deposits (Include all successful status tags)
-        cursor.execute("SELECT SUM(amount) as total FROM deposits WHERE telegram_user_id = ? AND status IN ('SUCCESS', 'COMPLETED', 'PAID', 'SUCCESSFUL', '1')", (telegram_id,))
+        # 1. Total Successful Deposits (Include all successful status tags & integer/string ID variants)
+        cursor.execute("SELECT SUM(amount) as total FROM deposits WHERE (telegram_user_id = ? OR telegram_user_id = CAST(? AS TEXT)) AND status IN ('SUCCESS', 'COMPLETED', 'PAID', 'SUCCESSFUL', '1')", (telegram_id, telegram_id))
         dep_row = cursor.fetchone()
         tot_dep = float(dep_row["total"]) if (dep_row and dep_row["total"]) else 0.0
         
         # 2. Total Spin Rewards
-        cursor.execute("SELECT SUM(result) as total FROM spin_history WHERE telegram_id = ?", (telegram_id,))
+        cursor.execute("SELECT SUM(result) as total FROM spin_history WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT))", (telegram_id, telegram_id))
         spin_row = cursor.fetchone()
         tot_spin = float(spin_row["total"]) if (spin_row and spin_row["total"]) else 0.0
 
         # 3. Total Sensi Spent
-        cursor.execute("SELECT SUM(price) as total FROM sensi_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        cursor.execute("SELECT SUM(price) as total FROM sensi_orders WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'", (telegram_id, telegram_id))
         sensi_row = cursor.fetchone()
         tot_sensi = float(sensi_row["total"]) if (sensi_row and sensi_row["total"]) else 0.0
 
         # 4. Total Panel Spent
-        cursor.execute("SELECT SUM(price) as total FROM panel_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        cursor.execute("SELECT SUM(price) as total FROM panel_orders WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'", (telegram_id, telegram_id))
         panel_row = cursor.fetchone()
         tot_panel = float(panel_row["total"]) if (panel_row and panel_row["total"]) else 0.0
 
         # 5. Total Tournament Spent
-        cursor.execute("SELECT SUM(price) as total FROM tournament_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        cursor.execute("SELECT SUM(price) as total FROM tournament_orders WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'", (telegram_id, telegram_id))
         trn_row = cursor.fetchone()
         tot_trn = float(trn_row["total"]) if (trn_row and trn_row["total"]) else 0.0
 
         # 6. Total DK AI Spent
-        cursor.execute("SELECT SUM(price) as total FROM dk_ai_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        cursor.execute("SELECT SUM(price) as total FROM dk_ai_orders WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'", (telegram_id, telegram_id))
         dk_row = cursor.fetchone()
         tot_dk = float(dk_row["total"]) if (dk_row and dk_row["total"]) else 0.0
 
         # 7. Total Gmail Spent
-        cursor.execute("SELECT SUM(amount) as total FROM gmail_recovery_requests WHERE telegram_id = ? AND status IN ('UNDER_REVIEW', 'COMPLETED', 'PAID')", (telegram_id,))
+        cursor.execute("SELECT SUM(amount) as total FROM gmail_recovery_requests WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status IN ('UNDER_REVIEW', 'COMPLETED', 'PAID')", (telegram_id, telegram_id))
         gmail_row = cursor.fetchone()
         tot_gmail = float(gmail_row["total"]) if (gmail_row and gmail_row["total"]) else 0.0
 

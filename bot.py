@@ -2348,6 +2348,29 @@ async def admin_toggle_panel_stock_cmd(update: Update, context: ContextTypes.DEF
     else:
         await update.message.reply_text("❌ Failed to update stock.", parse_mode="Markdown")
 
+async def admin_add_balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin command to add wallet balance to any user (/addbalance <user_id> <amount>)."""
+    user = update.effective_user
+    if not user or not config.is_admin(user.id):
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text("💡 Usage: `/addbalance <user_id> <amount>`\nExample: `/addbalance 8568912134 500`", parse_mode="Markdown")
+        return
+
+    try:
+        target_user_id = int(context.args[0])
+        amt = float(context.args[1])
+        db.get_or_create_user(target_user_id)
+        conn = db.get_connection()
+        with conn:
+            conn.execute("UPDATE users SET balance = balance + ? WHERE telegram_id = ?", (amt, target_user_id))
+        conn.close()
+        new_bal = db.get_user_balance(target_user_id)
+        await update.message.reply_text(f"✅ *Balance Credited!*\n\n👤 *User ID:* `{target_user_id}`\n💰 *Added Amount:* ₹{amt:.2f}\n💼 *New Wallet Balance:* ₹{new_bal:.2f}", parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
+
 async def error_handler(update: Optional[object], context: ContextTypes.DEFAULT_TYPE) -> None:
     """Global error handler for uncaught exceptions."""
     logger.error(f"Exception while handling an update: {context.error}", exc_info=context.error)
@@ -2396,6 +2419,7 @@ def main() -> None:
     application.add_handler(CommandHandler("setpanelprice", admin_set_panel_price_cmd))
     application.add_handler(CommandHandler("togglepanelstock", admin_toggle_panel_stock_cmd))
     application.add_handler(CommandHandler("panelsales", admin_panel_sales))
+    application.add_handler(CommandHandler("addbalance", admin_add_balance_cmd))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_messages))
     application.add_handler(CallbackQueryHandler(handle_callback_query))
     application.add_error_handler(error_handler)
