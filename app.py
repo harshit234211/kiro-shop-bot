@@ -2,6 +2,7 @@ import os
 import sys
 import threading
 import logging
+import uuid
 from flask import Flask, jsonify, request
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] [App]: %(message)s")
@@ -40,6 +41,7 @@ def tranzupi_webhook():
     try:
         import gateway as gtw
         import database as db
+        import sensi_engine as sensi_eng
         from webhook_server import send_telegram_notification
 
         if request.method == 'GET':
@@ -47,24 +49,99 @@ def tranzupi_webhook():
 
         payload = request.get_json(silent=True) or request.form.to_dict() or {}
         logging.info(f"Received TranzUPI Webhook Payload: {payload}")
-        success, msg = gtw.process_tranzupi_webhook_payload(payload)
+        order_id = str(payload.get("order_id") or payload.get("orderId") or payload.get("remark") or "").strip()
+        status_str = str(payload.get("status", "")).upper()
 
-        if success:
-            order_id = payload.get("order_id")
-            dep = db.get_deposit_by_order_id(order_id)
-            if dep:
-                user_id = dep["telegram_user_id"]
-                new_bal = db.get_user_balance(user_id)
-                notification_msg = (
-                    f"✅ *Deposit Successful!*\n\n"
-                    f"💰 *Amount Credited:* ₹{dep['amount']:.2f}\n"
-                    f"🆔 *Order ID:* `{order_id}`\n"
-                    f"💼 *New Wallet Balance:* ₹{new_bal:.2f}\n\n"
-                    f"Thank you for shopping at Kiro Shop! 🛍️"
-                )
-                send_telegram_notification(user_id, notification_msg)
+        if status_str in ["SUCCESS", "SUCCESSFUL", "PAID", "COMPLETED", "1", "TRUE"]:
+            # 1. Wallet Deposit Order
+            if order_id.startswith("KIR-"):
+                success, msg = gtw.process_tranzupi_webhook_payload(payload)
+                if success:
+                    dep = db.get_deposit_by_order_id(order_id)
+                    if dep:
+                        user_id = dep["telegram_user_id"]
+                        new_bal = db.get_user_balance(user_id)
+                        notification_msg = (
+                            f"✅ *Deposit Successful!*\n\n"
+                            f"💰 *Amount Credited:* ₹{dep['amount']:.2f}\n"
+                            f"🆔 *Order ID:* `{order_id}`\n"
+                            f"💼 *New Wallet Balance:* ₹{new_bal:.2f}\n\n"
+                            f"Thank you for shopping at Kiro Shop! 🛍️"
+                        )
+                        send_telegram_notification(user_id, notification_msg)
 
-        return jsonify({"success": success, "message": msg}), 200
+            # 2. Sensi Order
+            elif order_id.startswith("SENSI-"):
+                db.mark_sensi_order_paid(order_id)
+                order = db.get_sensi_order_by_id(order_id)
+                if order:
+                    user_id = order["telegram_id"]
+                    _, delivered_text = sensi_eng.generate_ff_sensitivity(
+                        telegram_id=user_id,
+                        order_id=order_id,
+                        brand=order["brand"],
+                        model=order["model"],
+                        variant=order["variant"]
+                    )
+                    send_telegram_notification(user_id, f"✅ *Payment Auto-Verified via TranzUPI!*\n\n{delivered_text}")
+
+            # 3. Tournament Order
+            elif order_id.startswith("TRN-"):
+                db.mark_tournament_order_success(order_id)
+                order = db.get_tournament_order_by_id(order_id)
+                if order:
+                    user_id = order["telegram_id"]
+                    unlocked_msg = (
+                        f"✅ *Payment Auto-Verified via TranzUPI!*\n\n"
+                        f"🏆 *Tournament Entry Unlocked.*\n\n"
+                        f"👇 Click below to enter:\nhttps://t.me/+4RKa1Af80ghiMTY1"
+                    )
+                    send_telegram_notification(user_id, unlocked_msg)
+
+            # 4. DK AI Order
+            elif order_id.startswith("DKAI-"):
+                db.mark_dk_ai_order_success(order_id)
+                order = db.get_dk_ai_order_by_id(order_id)
+                if order:
+                    user_id = order["telegram_id"]
+                    unlocked_msg = (
+                        f"✅ *Payment Auto-Verified via TranzUPI!*\n\n"
+                        f"🤖 *DK AI Assistant Unlocked.*\n\n"
+                        f"👇 Click below to enter:\nhttps://t.me/+et_POl-Eqnc4Y2Q9"
+                    )
+                    send_telegram_notification(user_id, unlocked_msg)
+
+            # 5. Gmail Recovery Order
+            elif order_id.startswith("KR-"):
+                db.mark_gmail_recovery_paid(order_id)
+                req = db.get_gmail_request_by_id(order_id)
+                if req:
+                    user_id = req["telegram_id"]
+                    confirmed_msg = (
+                        f"✅ *Payment Auto-Verified via TranzUPI*\n\n"
+                        f"Your Gmail recovery request has been submitted.\n\n"
+                        f"🆔 *Request ID:* `{order_id}`\n\n"
+                        f"Our support team will review your request."
+                    )
+                    send_telegram_notification(user_id, confirmed_msg)
+
+            # 6. Panel Order
+            elif order_id.startswith("PNL-"):
+                db.mark_panel_order_success(order_id)
+                order = db.get_panel_order_by_id(order_id)
+                if order:
+                    user_id = order["telegram_id"]
+                    delivered_msg = (
+                        f"✅ *Payment Auto-Verified via TranzUPI!*\n\n"
+                        f"🆔 *Order ID:* `{order_id}`\n"
+                        f"🔑 *License Key:* `KEY-{uuid.uuid4().hex[:12].upper()}`\n\n"
+                        f"Your key is ready to use!"
+                    )
+                    send_telegram_notification(user_id, delivered_msg)
+
+            return jsonify({"success": True, "message": "Payment verified and processed automatically"}), 200
+
+        return jsonify({"success": False, "message": "Ignored non-success status"}), 200
     except Exception as e:
         logging.error(f"Error handling webhook: {e}")
         return jsonify({"error": str(e)}), 500
