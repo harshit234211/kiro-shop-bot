@@ -1,0 +1,15 @@
+services:
+  - type: worker
+    name: kiro-shop-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python cloud_host_runner.py
+    envVars:
+      - key: BOT_TOKEN
+        value: 8815350090:AAHcgEg8hp1tbGOjfGyIJq22VUa0ihCROXU
+      - key: ADMIN_USER_IDS
+        value: "8568912134,8021345661"
+      - key: TRANZUPI_UPI_ID
+        value: paytm.s3h7hcx@pty
+      - key: MERCHANT_NAME
+        value: RAJ NARAYAN
