@@ -2275,7 +2275,7 @@ def main() -> None:
     db.init_db()
 
     # Start Webhook Listener Server in background thread
-    port = int(os.getenv("WEBHOOK_PORT", "5000"))
+    port = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "5000")))
     webhook_thread = threading.Thread(target=run_webhook_server, args=(port,), daemon=True)
     webhook_thread.start()
     logger.info(f"Background TranzUPI Webhook Server thread started on port {port}.")

@@ -118,5 +118,5 @@ def run_webhook_server(port: int = 5000):
         httpd.server_close()
 
 if __name__ == "__main__":
-    port = int(os.getenv("WEBHOOK_PORT", "5000"))
+    port = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "5000")))
     run_webhook_server(port)
