@@ -757,15 +757,17 @@ async def handle_tournament_app(update: Update, context: ContextTypes.DEFAULT_TY
 
     apk_url = config.FRAG_ARENA_APK_URL
     app_url = config.TOURNAMENT_APP_URL
+    group_url = "https://t.me/+4RKa1Af80ghiMTY1"
 
     unlocked_msg = (
         f"🏆 *Frag Arena - Free Fire Tournament App*\n\n"
         f"🎮 *App Name:* Frag Arena\n"
         f"📦 *Format:* Android APK\n"
         f"⚡ *Features:* Daily Custom Rooms, Auto Match Scoring, Live Leaderboards & Instant Payouts!\n\n"
-        f"👇 Tap below to Download APK or Open Web App:"
+        f"👇 Tap below to Join Telegram Group, Download APK, or Open Web App:"
     )
     keyboard = [
+        [InlineKeyboardButton("💬 Join Tournament Group 👥", url=group_url)],
         [InlineKeyboardButton("📥 Download Frag Arena APK 📲", url=apk_url)],
         [InlineKeyboardButton("🚀 Open Frag Arena Web App", url=app_url)],
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
