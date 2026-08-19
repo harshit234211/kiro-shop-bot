@@ -2392,11 +2392,15 @@ def main() -> None:
     logger.info("Initializing database...")
     db.init_db()
 
-    # Start Webhook Listener Server in background thread
-    port = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "5000")))
-    webhook_thread = threading.Thread(target=run_webhook_server, args=(port,), daemon=True)
-    webhook_thread.start()
-    logger.info(f"Background TranzUPI Webhook Server thread started on port {port}.")
+    # Start Webhook Listener Server in background thread (only when running standalone)
+    if os.getenv("RUNNING_UNDER_APP") != "1":
+        try:
+            port = int(os.getenv("WEBHOOK_PORT", "5001"))
+            webhook_thread = threading.Thread(target=run_webhook_server, args=(port,), daemon=True)
+            webhook_thread.start()
+            logger.info(f"Background TranzUPI Webhook Server thread started on port {port}.")
+        except Exception as e:
+            logger.warning(f"Standalone webhook server skipped/failed: {e}")
 
     logger.info("Starting Kiro Shop Telegram Bot...")
 

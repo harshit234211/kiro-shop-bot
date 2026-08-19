@@ -3,14 +3,43 @@ import sys
 import threading
 import logging
 import uuid
+import time
+import urllib.request
 from flask import Flask, jsonify, request
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] [%(levelname)s] [App]: %(message)s")
+os.environ["RUNNING_UNDER_APP"] = "1"
 
 app = Flask(__name__)
 
 bot_started = False
 bot_lock = threading.Lock()
+
+def start_keep_alive():
+    """Starts a background thread that pings the server every 3 minutes to prevent Render free-tier sleep."""
+    def keep_alive_loop():
+        time.sleep(10)
+        port = os.getenv("PORT", "10000")
+        render_url = os.getenv("RENDER_EXTERNAL_URL", "https://kiro-shop-bot-55yr.onrender.com").rstrip('/') + "/health"
+        local_url = f"http://127.0.0.1:{port}/health"
+
+        while True:
+            try:
+                logging.info(f"💓 Sending 24/7 Keep-Alive ping to {render_url}...")
+                req = urllib.request.Request(render_url, headers={"User-Agent": "KiroBotKeepAlive/1.0"})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    logging.info(f"✅ Keep-Alive response: {response.status}")
+            except Exception as e:
+                try:
+                    req = urllib.request.Request(local_url, headers={"User-Agent": "KiroBotKeepAlive/1.0"})
+                    with urllib.request.urlopen(req, timeout=10) as response:
+                        logging.info(f"✅ Local Keep-Alive response: {response.status}")
+                except Exception as ex:
+                    logging.warning(f"⚠️ Keep-Alive ping warning: {ex}")
+            time.sleep(180)
+
+    t = threading.Thread(target=keep_alive_loop, daemon=True)
+    t.start()
 
 def start_bot_worker():
     global bot_started
@@ -19,8 +48,9 @@ def start_bot_worker():
             return
         bot_started = True
 
+    start_keep_alive()
+
     def bot_loop():
-        import time
         import asyncio
         import bot
         while True:
