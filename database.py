@@ -10,12 +10,30 @@ from config import DB_PATH
 from logger import logger
 
 def get_connection() -> sqlite3.Connection:
-    """Creates directory if needed and returns a database connection."""
+    """Creates directory if needed and returns a database connection with WAL mode enabled."""
     db_file = Path(DB_PATH)
     db_file.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_file), timeout=15.0)
+    conn = sqlite3.connect(str(db_file), timeout=30.0)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA busy_timeout=5000;")
+    except Exception:
+        pass
     return conn
+
+def check_db_health() -> bool:
+    """Returns True if database connection and query execution are functional."""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        row = cursor.fetchone()
+        conn.close()
+        return row is not None
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        return False
 
 def init_db() -> None:
     """Initializes SQLite database tables and indexes."""
@@ -53,10 +71,30 @@ def init_db() -> None:
                 );
             """)
 
+            # Create Authoritative Wallet Transaction Ledger table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS wallet_ledger (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    transaction_id TEXT UNIQUE NOT NULL,
+                    telegram_user_id INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    balance_before REAL NOT NULL,
+                    balance_after REAL NOT NULL,
+                    reference_id TEXT DEFAULT NULL,
+                    status TEXT NOT NULL DEFAULT 'SUCCESS',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (telegram_user_id) REFERENCES users(telegram_id)
+                );
+            """)
+
             # Indexes for performance
             conn.execute("CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_deposits_order_id ON deposits(order_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_deposits_telegram_user ON deposits(telegram_user_id, created_at DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_ledger_user ON wallet_ledger(telegram_user_id, created_at DESC);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_ledger_tx_id ON wallet_ledger(transaction_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_ledger_ref ON wallet_ledger(reference_id);")
 
             # Create Sensi Buy tables
             conn.execute("""
@@ -517,6 +555,103 @@ def get_user_deposit_history(telegram_user_id: int, limit: int = 10) -> List[Dic
     finally:
         conn.close()
 
+def record_wallet_transaction(
+    telegram_id: int,
+    amount: float,
+    tx_type: str,
+    reference_id: Optional[str] = None,
+    custom_tx_id: Optional[str] = None
+) -> Tuple[bool, str, float]:
+    """
+    Atomic wallet transaction ledger record & balance mutation.
+    tx_type must be one of:
+      - 'DEPOSIT' (positive amount)
+      - 'SPIN_REWARD' (positive amount)
+      - 'SENSI_PURCHASE' (negative amount / deduction)
+      - 'PANEL_PURCHASE' (negative amount / deduction)
+      - 'DK_AI_PURCHASE' (negative amount / deduction)
+      - 'TOURNAMENT_PAYMENT' (negative amount / deduction)
+      - 'GMAIL_RECOVERY_PAYMENT' (negative amount / deduction)
+
+    Returns (success, message_or_tx_id, new_balance).
+    """
+    conn = get_connection()
+    try:
+        with conn:
+            cursor = conn.cursor()
+            # 0. Ensure user row exists first
+            cursor.execute("""
+                INSERT INTO users (telegram_id, username, first_name, balance)
+                VALUES (?, 'User', 'User', 0.0)
+                ON CONFLICT(telegram_id) DO NOTHING;
+            """, (telegram_id,))
+
+            # 1. Check if reference_id already credited (Idempotency protection)
+            if reference_id and tx_type in ['DEPOSIT', 'SPIN_REWARD']:
+                cursor.execute("SELECT transaction_id, balance_after FROM wallet_ledger WHERE reference_id = ? AND status = 'SUCCESS'", (reference_id,))
+                existing_ref = cursor.fetchone()
+                if existing_ref:
+                    cursor.execute("SELECT balance FROM users WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT))", (telegram_id, telegram_id))
+                    r = cursor.fetchone()
+                    cur_bal = float(r["balance"]) if r else 0.0
+                    return True, existing_ref["transaction_id"], cur_bal
+
+            # 2. Lock & fetch current balance
+            cursor.execute("SELECT balance FROM users WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT))", (telegram_id, telegram_id))
+            user_row = cursor.fetchone()
+            balance_before = float(user_row["balance"]) if user_row else 0.0
+
+            # 3. Calculate new balance
+            balance_change = float(amount)
+            balance_after = balance_before + balance_change
+
+            # 4. Check negative balance guard
+            if balance_after < -0.001:
+                return False, f"INSUFFICIENT_BALANCE|Required: ₹{abs(amount):.2f}\nYour Balance: ₹{balance_before:.2f}", balance_before
+
+            balance_after = max(0.0, balance_after)
+
+            # 5. Generate transaction ID if not passed
+            tx_id = custom_tx_id or f"TXN-{uuid.uuid4().hex[:12].upper()}"
+
+            # 6. Update user balance
+            cursor.execute("""
+                UPDATE users
+                SET balance = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT))
+            """, (balance_after, telegram_id, telegram_id))
+
+            # 7. Record transaction ledger entry
+            cursor.execute("""
+                INSERT INTO wallet_ledger (transaction_id, telegram_user_id, type, amount, balance_before, balance_after, reference_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'SUCCESS')
+            """, (tx_id, telegram_id, tx_type, balance_change, balance_before, balance_after, reference_id))
+
+        logger.info(f"💼 [LEDGER TRANSACTION] User={telegram_id}, Type={tx_type}, Amount={balance_change:+.2f}, BalBefore={balance_before:.2f}, BalAfter={balance_after:.2f}, TxID={tx_id}")
+        return True, tx_id, balance_after
+    except Exception as e:
+        logger.error(f"Error in record_wallet_transaction for {telegram_id}: {e}")
+        return False, f"Transaction error: {e}", 0.0
+    finally:
+        conn.close()
+
+def get_user_wallet_transactions(telegram_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+    """Retrieves recent wallet ledger transactions for a user."""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM wallet_ledger
+            WHERE (telegram_user_id = ? OR telegram_user_id = CAST(? AS TEXT)) AND status = 'SUCCESS'
+            ORDER BY id DESC LIMIT ?
+        """, (telegram_id, telegram_id, limit))
+        return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"Error fetching wallet ledger for {telegram_id}: {e}")
+        return []
+    finally:
+        conn.close()
+
 def credit_wallet_transaction(
     order_id: str,
     transaction_id: str,
@@ -528,7 +663,7 @@ def credit_wallet_transaction(
     1. Order must exist
     2. Order status must be PENDING (not already SUCCESS, FAILED, or EXPIRED)
     3. Amount must match verified_amount
-    4. Updates user balance AND marks deposit SUCCESS atomically.
+    4. Updates user balance AND marks deposit SUCCESS atomically with ledger entry.
     """
     conn = get_connection()
     try:
@@ -545,8 +680,8 @@ def credit_wallet_transaction(
         current_status = deposit["status"]
 
         if current_status == "SUCCESS":
-            logger.warning(f"Duplicate credit attempt blocked for Order {order_id}.")
-            return False, "Order already processed as SUCCESS"
+            logger.info(f"Order {order_id} already processed as SUCCESS (Idempotent).")
+            return True, "Order already processed as SUCCESS"
 
         if current_status != "PENDING":
             logger.warning(f"Credit failed: Order {order_id} status is {current_status}.")
@@ -559,16 +694,7 @@ def credit_wallet_transaction(
             logger.warning(f"Credit failed for Order {order_id}: Amount mismatch (Expected ₹{expected_amount}, Got ₹{verified_amount}).")
             return False, "Deposit amount mismatch"
 
-        # ATOMIC TRANSACTION: Update user balance and deposit status in single transaction
         with conn:
-            # 0. Ensure user record exists
-            cursor.execute("""
-                INSERT INTO users (telegram_id, username, first_name, balance)
-                VALUES (?, 'User', 'User', 0.0)
-                ON CONFLICT(telegram_id) DO NOTHING;
-            """, (telegram_user_id,))
-
-            # 1. Update deposit status first with status check
             cursor.execute("""
                 UPDATE deposits
                 SET status = 'SUCCESS',
@@ -580,20 +706,21 @@ def credit_wallet_transaction(
             """, (transaction_id, payment_reference, order_id))
 
             if cursor.rowcount == 0:
-                # Race condition: Another process already updated this order
                 return False, "Order state changed concurrently"
 
-            # 2. Credit user wallet balance server-side
-            cursor.execute("""
-                UPDATE users
-                SET balance = balance + ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE telegram_id = ?
-            """, (expected_amount, telegram_user_id))
+        success, tx_res, _ = record_wallet_transaction(
+            telegram_id=telegram_user_id,
+            amount=expected_amount,
+            tx_type='DEPOSIT',
+            reference_id=order_id,
+            custom_tx_id=transaction_id
+        )
 
-        sync_user_balance_integrity(telegram_user_id)
-        logger.info(f"Wallet credit SUCCESS: Order={order_id}, User={telegram_user_id}, Credited=₹{expected_amount:.2f}")
-        return True, "Wallet credited successfully"
+        if success:
+            logger.info(f"Wallet credit SUCCESS: Order={order_id}, User={telegram_user_id}, Credited=₹{expected_amount:.2f}")
+            return True, "Wallet credited successfully"
+        else:
+            return False, f"Ledger error: {tx_res}"
     except Exception as e:
         logger.error(f"Error during credit_wallet_transaction for order {order_id}: {e}")
         return False, f"Database transaction error: {str(e)}"
@@ -963,7 +1090,7 @@ def update_gmail_recovery_email(order_id: str, email: str) -> bool:
 
 def process_wallet_gmail_recovery_payment(order_id: str) -> Tuple[bool, str]:
     """
-    Atomically deducts wallet balance for Gmail Recovery service and updates status to UNDER_REVIEW.
+    Atomically deducts wallet balance via ledger for Gmail Recovery service.
     Prevents double-spending, race conditions, or insufficient balance.
     """
     conn = get_connection()
@@ -981,35 +1108,22 @@ def process_wallet_gmail_recovery_payment(order_id: str) -> Tuple[bool, str]:
         telegram_id = req["telegram_id"]
         fee = float(req["amount"])
 
-        # Check current user balance
-        cursor.execute("SELECT balance FROM users WHERE telegram_id = ?", (telegram_id,))
-        user_row = cursor.fetchone()
+        success, tx_res, _ = record_wallet_transaction(
+            telegram_id=telegram_id,
+            amount=-fee,
+            tx_type='GMAIL_RECOVERY_PAYMENT',
+            reference_id=order_id
+        )
 
-        if not user_row:
-            return False, "User not found"
-
-        current_balance = float(user_row["balance"])
-
-        if current_balance < fee:
-            return False, f"Insufficient wallet balance (Required: ₹{fee:.2f}, Balance: ₹{current_balance:.2f})"
+        if not success:
+            return False, tx_res
 
         with conn:
-            # 1. Update request status to UNDER_REVIEW atomically
             cursor.execute("""
                 UPDATE gmail_recovery_requests
                 SET status = 'UNDER_REVIEW', payment_method = 'WALLET', updated_at = CURRENT_TIMESTAMP
                 WHERE order_id = ? AND status = 'PENDING_PAYMENT'
             """, (order_id,))
-
-            if cursor.rowcount == 0:
-                return False, "Request state changed concurrently"
-
-            # 2. Deduct user wallet balance
-            cursor.execute("""
-                UPDATE users
-                SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP
-                WHERE telegram_id = ?
-            """, (fee, telegram_id))
 
         logger.info(f"Gmail Recovery Wallet Payment SUCCESS: Order={order_id}, User={telegram_id}, Deducted=₹{fee:.2f}")
         return True, "Payment successful"
@@ -1291,67 +1405,148 @@ def get_panel_sales_summary() -> Dict[str, Any]:
 # =====================================================================
 
 def get_user_profile_stats(telegram_id: int) -> Dict[str, Any]:
-    """Calculates complete profile statistics for a user."""
+    """
+    Retrieves fresh, comprehensive server-side Profile & Wallet statistics from database.
+    Calculates exact totals from ledger & tables:
+    - Authoritative Wallet Balance
+    - Total Deposited (Sum of VERIFIED deposit ledger entries)
+    - Total Purchases (Sum of completed purchase orders)
+    - Total Orders (Count of completed orders)
+    - Total Spin Rewards (Sum of SPIN_REWARD ledger entries)
+    - Total Referrals (Count of verified referral records)
+    - Joined Date
+    """
+    sync_user_balance_integrity(telegram_id)
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+        cursor.execute("SELECT id, telegram_id, username, first_name, balance, created_at FROM users WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT))", (telegram_id, telegram_id))
         user_row = cursor.fetchone()
 
         if not user_row:
             return {
                 "telegram_id": telegram_id,
-                "username": None,
+                "username": "Not Set",
+                "first_name": "User",
                 "balance": 0.0,
                 "total_deposited": 0.0,
                 "total_purchases": 0.0,
                 "total_orders": 0,
-                "joined_date": "N/A"
+                "total_spin_rewards": 0.0,
+                "total_referrals": 0,
+                "joined_date": "Not Set"
             }
 
         balance = float(user_row["balance"])
-        username = user_row["username"]
+        raw_username = user_row["username"]
+        username_str = f"@{raw_username}" if raw_username and raw_username.strip() else "Not Set"
+        first_name = user_row["first_name"] or "User"
         created_at_raw = str(user_row["created_at"])
         try:
             dt = datetime.strptime(created_at_raw.split(".")[0], "%Y-%m-%d %H:%M:%S")
             joined_date = dt.strftime("%d %b %Y")
         except Exception:
-            joined_date = created_at_raw.split(" ")[0] if " " in created_at_raw else created_at_raw
+            joined_date = created_at_raw.split(" ")[0] if (" " in created_at_raw) else "Not Set"
 
-        # Total Deposited (Historical Sum of Completed Deposits)
-        cursor.execute("SELECT SUM(amount) as sum_dep FROM deposits WHERE telegram_user_id = ? AND status = 'COMPLETED'", (telegram_id,))
+        # Total Deposited (Sum of VERIFIED deposit transactions in deposits)
+        cursor.execute("""
+            SELECT SUM(amount) as total FROM deposits
+            WHERE (telegram_user_id = ? OR telegram_user_id = CAST(? AS TEXT))
+              AND status IN ('SUCCESS', 'COMPLETED', 'PAID', 'SUCCESSFUL', '1')
+        """, (telegram_id, telegram_id))
         dep_row = cursor.fetchone()
-        total_deposited = float(dep_row["sum_dep"]) if (dep_row and dep_row["sum_dep"]) else 0.0
+        total_deposited = float(dep_row["total"]) if (dep_row and dep_row["total"]) else 0.0
 
         # Total Sensi Purchases
-        cursor.execute("SELECT SUM(price) as sensi_sum, COUNT(*) as sensi_cnt FROM sensi_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        cursor.execute("""
+            SELECT SUM(price) as sensi_sum, COUNT(*) as sensi_cnt FROM sensi_orders
+            WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'
+        """, (telegram_id, telegram_id))
         sensi_row = cursor.fetchone()
         sensi_sum = float(sensi_row["sensi_sum"]) if (sensi_row and sensi_row["sensi_sum"]) else 0.0
         sensi_cnt = int(sensi_row["sensi_cnt"]) if sensi_row else 0
 
         # Total Panel Purchases
-        cursor.execute("SELECT SUM(price) as panel_sum, COUNT(*) as panel_cnt FROM panel_orders WHERE telegram_id = ? AND status = 'SUCCESS'", (telegram_id,))
+        cursor.execute("""
+            SELECT SUM(price) as panel_sum, COUNT(*) as panel_cnt FROM panel_orders
+            WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'
+        """, (telegram_id, telegram_id))
         panel_row = cursor.fetchone()
         panel_sum = float(panel_row["panel_sum"]) if (panel_row and panel_row["panel_sum"]) else 0.0
         panel_cnt = int(panel_row["panel_cnt"]) if panel_row else 0
 
-        # Total Gmail Requests
-        cursor.execute("SELECT SUM(amount) as gmail_sum, COUNT(*) as gmail_cnt FROM gmail_recovery_requests WHERE telegram_id = ? AND status IN ('UNDER_REVIEW', 'COMPLETED', 'PAID')", (telegram_id,))
+        # Total Tournament Purchases
+        cursor.execute("""
+            SELECT SUM(price) as trn_sum, COUNT(*) as trn_cnt FROM tournament_orders
+            WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'
+        """, (telegram_id, telegram_id))
+        trn_row = cursor.fetchone()
+        trn_sum = float(trn_row["trn_sum"]) if (trn_row and trn_row["trn_sum"]) else 0.0
+        trn_cnt = int(trn_row["trn_cnt"]) if trn_row else 0
+
+        # Total DK AI Purchases
+        cursor.execute("""
+            SELECT SUM(price) as dk_sum, COUNT(*) as dk_cnt FROM dk_ai_orders
+            WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) AND status = 'SUCCESS'
+        """, (telegram_id, telegram_id))
+        dk_row = cursor.fetchone()
+        dk_sum = float(dk_row["dk_sum"]) if (dk_row and dk_row["dk_sum"]) else 0.0
+        dk_cnt = int(dk_row["dk_cnt"]) if dk_row else 0
+
+        # Total Gmail Recovery Requests
+        cursor.execute("""
+            SELECT SUM(amount) as gmail_sum, COUNT(*) as gmail_cnt FROM gmail_recovery_requests
+            WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT))
+              AND status IN ('UNDER_REVIEW', 'COMPLETED', 'PAID')
+        """, (telegram_id, telegram_id))
         gmail_row = cursor.fetchone()
         gmail_sum = float(gmail_row["gmail_sum"]) if (gmail_row and gmail_row["gmail_sum"]) else 0.0
         gmail_cnt = int(gmail_row["gmail_cnt"]) if gmail_row else 0
 
-        total_purchases = sensi_sum + panel_sum + gmail_sum
-        total_orders = sensi_cnt + panel_cnt + gmail_cnt
+        total_purchases = sensi_sum + panel_sum + trn_sum + dk_sum + gmail_sum
+        total_orders = sensi_cnt + panel_cnt + trn_cnt + dk_cnt + gmail_cnt
+
+        # Total Spin Rewards
+        cursor.execute("""
+            SELECT SUM(result) as spin_sum FROM spin_history
+            WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT))
+        """, (telegram_id, telegram_id))
+        spin_row = cursor.fetchone()
+        total_spin_rewards = float(spin_row["spin_sum"]) if (spin_row and spin_row["spin_sum"]) else 0.0
+
+        # Total Referrals
+        cursor.execute("""
+            SELECT COUNT(*) as ref_cnt FROM referrals
+            WHERE (referrer_id = ? OR referrer_id = CAST(? AS TEXT))
+        """, (telegram_id, telegram_id))
+        ref_row = cursor.fetchone()
+        total_referrals = int(ref_row["ref_cnt"]) if ref_row else 0
 
         return {
             "telegram_id": telegram_id,
-            "username": username,
+            "username": username_str,
+            "first_name": first_name,
             "balance": balance,
             "total_deposited": total_deposited,
             "total_purchases": total_purchases,
             "total_orders": total_orders,
+            "total_spin_rewards": total_spin_rewards,
+            "total_referrals": total_referrals,
             "joined_date": joined_date
+        }
+    except Exception as e:
+        logger.error(f"Error in get_user_profile_stats for {telegram_id}: {e}")
+        return {
+            "telegram_id": telegram_id,
+            "username": "Not Set",
+            "first_name": "User",
+            "balance": 0.0,
+            "total_deposited": 0.0,
+            "total_purchases": 0.0,
+            "total_orders": 0,
+            "total_spin_rewards": 0.0,
+            "total_referrals": 0,
+            "joined_date": "Not Set"
         }
     finally:
         conn.close()
@@ -1361,7 +1556,7 @@ def can_user_spin(telegram_id: int) -> Tuple[bool, int, int]:
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT created_at FROM spin_history WHERE telegram_id = ? ORDER BY created_at DESC LIMIT 1", (telegram_id,))
+        cursor.execute("SELECT created_at FROM spin_history WHERE (telegram_id = ? OR telegram_id = CAST(? AS TEXT)) ORDER BY created_at DESC LIMIT 1", (telegram_id, telegram_id))
         row = cursor.fetchone()
 
         if not row:
@@ -1391,14 +1586,13 @@ def record_user_spin(telegram_id: int) -> Tuple[Optional[int], bool, float, Opti
     """
     Performs server-side RNG spin for user if eligible.
     Probability of special number 20 is exactly 1/200 (0.005). Otherwise 1-9.
-    Automatically credits reward amount to user's wallet balance immediately.
+    Automatically credits reward amount to user's wallet balance via ledger immediately.
     Returns (result_number, is_special, reward_amount, error_message).
     """
     can_spin, h_left, m_left = can_user_spin(telegram_id)
     if not can_spin:
         return None, False, 0.0, f"⏳ Next spin available in {h_left}h {m_left}m."
 
-    # Server-Side Secure RNG: 1/200 chance = 0.005
     if random.random() < 0.005:
         result = 20
         is_special = True
@@ -1408,21 +1602,25 @@ def record_user_spin(telegram_id: int) -> Tuple[Optional[int], bool, float, Opti
         is_special = False
         reward_amount = float(result)
 
+    ref_id = f"SPIN-{uuid.uuid4().hex[:8].upper()}"
+
+    success, tx_res, _ = record_wallet_transaction(
+        telegram_id=telegram_id,
+        amount=reward_amount,
+        tx_type='SPIN_REWARD',
+        reference_id=ref_id
+    )
+
+    if not success:
+        return None, False, 0.0, f"Spin credit error: {tx_res}"
+
     conn = get_connection()
     try:
         with conn:
-            # 1. Record spin history
             conn.execute("""
                 INSERT INTO spin_history (telegram_id, result, is_special)
                 VALUES (?, ?, ?)
             """, (telegram_id, result, 1 if is_special else 0))
-
-            # 2. Automatically credit reward to user's wallet balance immediately
-            conn.execute("""
-                UPDATE users
-                SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP
-                WHERE telegram_id = ?
-            """, (reward_amount, telegram_id))
 
         logger.info(f"Recorded Spin for User {telegram_id}: Result={result}, Special={is_special}, Wallet Credited=₹{reward_amount:.2f}")
         return result, is_special, reward_amount, None

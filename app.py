@@ -69,11 +69,15 @@ def start_bot_worker():
 @app.route('/')
 @app.route('/health')
 def health_check():
+    import database as db
+    db_ok = db.check_db_health()
+    status_str = "ok" if db_ok else "degraded"
     return jsonify({
-        "status": "ONLINE",
-        "service": "Kiro Shop Bot 24/7 Cloud Host",
-        "bot_active": bot_started
-    }), 200
+        "status": status_str,
+        "database": "connected" if db_ok else "disconnected",
+        "bot_active": bot_started,
+        "service": "Kiro Shop Cloud Production"
+    }), 200 if db_ok else 503
 
 @app.route('/download/frag_arena.apk')
 def download_frag_arena_apk():

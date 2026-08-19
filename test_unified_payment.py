@@ -8,22 +8,22 @@ class TestUnifiedPaymentEngine(unittest.TestCase):
     def setUpClass(cls):
         db.init_db()
 
-    def test_01_sensi_price_is_49(self):
+    def test_01_sensi_price_is_59(self):
         price = db.get_sensi_price()
-        self.assertEqual(price, 49.0)
-        print("✅ Test 1 Passed: Default Sensi price set to ₹49.00.")
+        self.assertEqual(price, 59.0)
+        print("✅ Test 1 Passed: Default Sensi price set to ₹59.00.")
 
     def test_02_deposit_button_in_features(self):
         self.assertTrue(FEATURES.get("wallet", True))
         print("✅ Test 2 Passed: Wallet & Deposit buttons enabled in FEATURES config.")
 
-    def test_03_atomic_wallet_deduction_for_sensi_49(self):
+    def test_03_atomic_wallet_deduction_for_sensi_59(self):
         user_id = secrets.randbelow(800000000) + 100000
         db.get_or_create_user(user_id, "sensipurchaser", "SensiPurchaser")
 
         # Credit ₹100 to wallet
         dep = db.create_deposit(user_id, 100.0, f"KIR-DEP_{user_id}")
-        db.credit_wallet_transaction(dep["order_id"], "TXN_TEST", "UTR_TEST", 100.0)
+        db.credit_wallet_transaction(dep["order_id"], f"TXN_TEST_{user_id}", "UTR_TEST", 100.0)
 
         order_id = f"SENSI-TEST_{user_id}"
         db.create_sensi_order(
@@ -33,7 +33,7 @@ class TestUnifiedPaymentEngine(unittest.TestCase):
             ram="8GB",
             storage="256GB",
             payment_method="PENDING",
-            price=49.0,
+            price=59.0,
             order_id=order_id
         )
 
@@ -41,8 +41,8 @@ class TestUnifiedPaymentEngine(unittest.TestCase):
         self.assertTrue(success)
 
         user_rec = db.get_or_create_user(user_id)
-        self.assertAlmostEqual(user_rec["balance"], 51.0, places=2)
-        print("✅ Test 3 Passed: Atomic wallet payment for Sensi ₹49.00 validated.")
+        self.assertAlmostEqual(user_rec["balance"], 41.0, places=2)
+        print("✅ Test 3 Passed: Atomic wallet payment for Sensi ₹59.00 validated.")
 
     def test_04_atomic_wallet_deduction_for_tournament_99(self):
         user_id = secrets.randbelow(800000000) + 100000
@@ -50,7 +50,7 @@ class TestUnifiedPaymentEngine(unittest.TestCase):
 
         # Credit ₹150 to wallet
         dep = db.create_deposit(user_id, 150.0, f"KIR-DEP_{user_id}")
-        db.credit_wallet_transaction(dep["order_id"], "TXN_TEST", "UTR_TEST", 150.0)
+        db.credit_wallet_transaction(dep["order_id"], f"TXN_TEST_{user_id}", "UTR_TEST", 150.0)
 
         order_id = f"TRN-TEST_{user_id}"
         db.create_tournament_order(user_id, 99.0, order_id=order_id)

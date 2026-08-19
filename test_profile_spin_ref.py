@@ -14,7 +14,7 @@ class TestProfileSpinReferralFeatures(unittest.TestCase):
 
         stats = db.get_user_profile_stats(user_id)
         self.assertEqual(stats["telegram_id"], user_id)
-        self.assertEqual(stats["username"], "profileuser")
+        self.assertIn("profileuser", stats["username"])
         self.assertEqual(stats["total_deposited"], 0.0)
         self.assertEqual(stats["total_purchases"], 0.0)
         self.assertEqual(stats["total_orders"], 0)

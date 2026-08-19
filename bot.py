@@ -625,6 +625,38 @@ async def handle_gmail_recovery_issue_selection(update: Update, context: Context
     if update.callback_query:
         await update.callback_query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=markup)
 
+async def handle_wallet_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Renders the 💰 Wallet card with authoritative DB balance and action buttons."""
+    user = update.effective_user
+    if not user:
+        return
+
+    db.get_or_create_user(user.id, user.username, user.first_name)
+    balance = db.get_user_balance(user.id)
+    if balance is None:
+        await update.effective_message.reply_text("⚠️ Service temporarily unavailable. Please try again.")
+        return
+
+    msg = (
+        f"💰 *Kiro Wallet*\n\n"
+        f"💵 *Available Balance:* ₹{balance:.2f}\n\n"
+        f"Use your wallet balance for instant 1-click purchases of Sensi, Panels, and Services!"
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("💳 Deposit", callback_data="nav_deposit_presets"), InlineKeyboardButton("📜 Deposit History", callback_data="view_history")],
+        [InlineKeyboardButton("📊 Transactions", callback_data="view_transactions"), InlineKeyboardButton("⬅️ Back to Menu", callback_data="nav_main")]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=markup)
+        except Exception:
+            await context.bot.send_message(chat_id=user.id, text=msg, parse_mode="Markdown", reply_markup=markup)
+    elif update.message:
+        await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=markup)
+
 async def handle_profile_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Renders the 👤 Profile card."""
     user = update.effective_user
@@ -634,23 +666,70 @@ async def handle_profile_click(update: Update, context: ContextTypes.DEFAULT_TYP
     db.get_or_create_user(user.id, user.username, user.first_name)
     stats = db.get_user_profile_stats(user.id)
 
-    uname_str = f"@{stats['username']}" if stats['username'] else "Not Set"
-
     msg = (
-        f"👤 *Kiro Shop Profile*\n\n"
-        f"🆔 *User ID:* `{stats['telegram_id']}`\n"
-        f"👤 *Username:* {uname_str}\n"
-        f"💰 *Wallet Balance:* ₹{stats['balance']:.2f}\n"
-        f"💳 *Total Deposited:* ₹{stats['total_deposited']:.2f}\n"
-        f"🛒 *Total Purchases:* ₹{stats['total_purchases']:.2f}\n"
-        f"📊 *Total Orders:* {stats['total_orders']}\n"
+        f"👤 *KIRO SHOP PROFILE*\n\n"
+        f"🆔 *ID:* `{stats['telegram_id']}`\n"
+        f"👤 *Username:* {stats['username']}\n\n"
+        f"💰 *Wallet:* ₹{stats['balance']:.2f}\n"
+        f"💳 *Deposited:* ₹{stats['total_deposited']:.2f}\n"
+        f"🛒 *Purchases:* ₹{stats['total_purchases']:.2f}\n"
+        f"📦 *Orders:* {stats['total_orders']}\n"
+        f"🎰 *Spin Rewards:* ₹{stats['total_spin_rewards']:.2f}\n"
+        f"👥 *Referrals:* {stats['total_referrals']}\n"
         f"📅 *Joined:* {stats['joined_date']}"
     )
 
+    keyboard = [
+        [InlineKeyboardButton("💰 Wallet", callback_data="nav_wallet"), InlineKeyboardButton("📜 Deposit History", callback_data="view_history")],
+        [InlineKeyboardButton("📊 Transactions", callback_data="view_transactions"), InlineKeyboardButton("⬅️ Back", callback_data="nav_main")]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+
     if update.callback_query:
-        await update.callback_query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
+        try:
+            await update.callback_query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=markup)
+        except Exception:
+            await context.bot.send_message(chat_id=user.id, text=msg, parse_mode="Markdown", reply_markup=markup)
     elif update.message:
-        await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=get_back_inline_keyboard("main"))
+        await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=markup)
+
+async def handle_transactions_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Renders recent wallet transaction ledger history."""
+    user = update.effective_user
+    if not user:
+        return
+
+    txs = db.get_user_wallet_transactions(user.id, limit=10)
+    if not txs:
+        msg = (
+            f"📊 *Wallet Transaction History*\n\n"
+            f"No transactions recorded yet.\n\n"
+            f"Your ledger transactions for deposits, rewards, and purchases will appear here."
+        )
+    else:
+        msg_lines = ["📊 *Wallet Transaction History*\n"]
+        for tx in txs:
+            amt = float(tx["amount"])
+            icon = "➕" if amt > 0 else "➖"
+            sign_amt = f"₹{abs(amt):.2f}"
+            tx_type = tx["type"].replace("_", " ")
+            dt_str = str(tx["created_at"]).split(".")[0]
+            msg_lines.append(f"{icon} *{sign_amt}* — {tx_type}\n🆔 `{tx['transaction_id']}`\n📅 {dt_str}\n")
+        msg = "\n".join(msg_lines)
+
+    keyboard = [
+        [InlineKeyboardButton("💰 Wallet", callback_data="nav_wallet"), InlineKeyboardButton("📜 Deposit History", callback_data="view_history")],
+        [InlineKeyboardButton("👤 Profile", callback_data="nav_profile"), InlineKeyboardButton("⬅️ Back", callback_data="nav_main")]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+
+    if update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text=msg, parse_mode="Markdown", reply_markup=markup)
+        except Exception:
+            await context.bot.send_message(chat_id=user.id, text=msg, parse_mode="Markdown", reply_markup=markup)
+    elif update.message:
+        await update.message.reply_text(text=msg, parse_mode="Markdown", reply_markup=markup)
 
 async def handle_spin_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Renders the 🎰 Daily Spin menu card (Set to Coming Soon)."""
@@ -1009,7 +1088,7 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
     user = query.from_user
     logger.info(f"🔘 [BUTTON PRESS] User: {user.first_name} ({user.id}) pressed button '{data}'")
 
-    if data == "nav_main" or data == "nav_wallet":
+    if data == "nav_main":
         context.user_data.clear()
         user_record = db.get_or_create_user(user.id, user.username, user.first_name)
         balance = user_record.get("balance", 0.0)
@@ -1041,6 +1120,12 @@ async def handle_callback_query(update: Update, context: ContextTypes.DEFAULT_TY
                     parse_mode="Markdown",
                     reply_markup=get_main_keyboard()
                 )
+    elif data == "nav_wallet":
+        await handle_wallet_start(update, context)
+    elif data == "nav_profile":
+        await handle_profile_click(update, context)
+    elif data == "view_transactions":
+        await handle_transactions_history(update, context)
     elif data == "view_history":
         await handle_deposit_history(update, context)
     elif data in ["nav_tournament", "btn_tournament"]:
@@ -2431,8 +2516,14 @@ def main() -> None:
     logger.info("Kiro Shop Bot started polling...")
     try:
         application.run_polling(drop_pending_updates=True, stop_signals=None)
+    except telegram.error.Conflict as e:
+        logger.warning(f"⚠️ Telegram Bot Token conflict detected (Another process is polling). Waiting 10s... ({e})")
+        import time
+        time.sleep(10)
     except Exception as e:
         logger.error(f"Error in run_polling: {e}", exc_info=e)
+        import time
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
